@@ -14,3 +14,6 @@ keystore.properties
 
 # Release artifacts are attached to GitHub releases, not tracked
 *.apk
+
+# Release checksums are attached to GitHub releases, not tracked
+*.sha256
