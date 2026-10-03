@@ -60,7 +60,7 @@ Three scopes in `ui/theme/Palette.kt`: `SHELL` (rust, the Anvil home/settings), 
    answer matching (ported exactly; flag ids `practice__<cat>__<topic>__<cmd>` match the web), Important list across both. It is a virtual
    "Practice" group on the ICT module screen.
    Equation is done too (`ui/web`, `FormulaScreens`): a virtual "Equation" group on ICT, cover-and-recall. Still to do: highlights.
-5. Mobile extras (reminders, streaks, spaced repetition, timed exams).
+5. ✅ Highlights, recycle bin, left/right-hand layout. Next: mobile extras (reminders, streaks, spaced repetition, timed exams).
 
 ## Pre-rendered pages (math formulas, equations, financial terms)
 The web apps build these from JSX + KaTeX; Anvil ships them as static HTML in `app/src/main/assets/web` and shows each in a
@@ -72,7 +72,21 @@ forced ON, lets headless Chrome run the web's own uid code to tag each math card
 active palette. Re-run the tool whenever the web apps change those pages. Equation highlights will need the web's DOM anchoring ported
 into the WebView (blocks are already tagged `data-hl-block`).
 
+## Highlights, recycle bin, hand layout
+- Highlights (`highlight/`, `ui/highlight/HText.kt`): same `user_highlights` rows and block keys as the web (`q`, `q.N`, `explanation`, `summary.N`, `points.N`,
+  `table.rR.cC`, `eq`-page `sym:`/`eq:` keys...). `Anchor` is a port of `textAnchor.js`; selection uses a read-only text field, the colour bar replaces the
+  system menu. HTML blocks are aligned to the browser's `textContent` offsets (`HtmlAlign`). Equation pages use the web's own anchoring JS, generated
+  into `assets/web/highlight.js` by the prerender tool. Edits are local first and queued, like flags.
+- Recycle bin (`trash/`): trash/restore/purge via the owner-only RPCs, queued offline (`TrashQueue`), hidden instantly; "not authorized" undoes locally.
+- Left-hand layout: `LocalLeftHand` + `HandMirror`/`AnvilTopBar` flip bars and action rows (Home hand icon or Settings).
+
+## Releasing
+`tools/release.sh` builds the signed APK, writes `Anvil-vX.Y.Z.apk` + `.sha256`; `tools/release.sh --publish` creates the GitHub release
+(repo `s-shahriar/Anvil` must be public). Bump `versionName`/`versionCode` first; notes come from `RELEASE_NOTES.md`.
+
 ## Open items (check later)
+- Highlights: verified on a General question and on an Equation page; not yet by hand on the Written/Extra/Viva cards, ICT MCQ code blocks, math page (not highlightable), or sync after sign-in.
+- Recycle bin: restore of a server-side trashed question needs a sign-in as the owner; not exercised end to end.
 - Math page: 13 of the owner's 15 saved `m…` marks match computed card ids; 2 (`m1y7v8pus1j3`, `mz4jpvp31v0`) match no current card
   (probably retitled since). On the emulator the section chip row above the WebView did not paint until the first interaction;
   likely a software-GL artefact, but check on a real phone. First paint of a page takes seconds on the emulator.
@@ -82,7 +96,7 @@ into the WebView (blocks are already tagged `data-hl-block`).
   Check size/aspect, dark mode, and the "Image not available offline" placeholder with the cache cleared.
 - Not yet looked at by hand: Extra and Viva readers, the Nailed/Important lists for long-form cards, Settings "Pictures: x of y",
   dark theme on the new screens, tablets / large font sizes.
-- Not built yet: left/right-hand toggle, recycle bin, highlights (all modules).
+- Not built yet: mobile extras (reminders, streaks, spaced repetition, timed exams).
 - Practice is verified for Linux and the SQL first topic only; SQL answers with multi-line `answers`, the Commands tab and the Important
   list screen have not been looked at by hand.
 

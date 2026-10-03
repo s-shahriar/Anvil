@@ -148,7 +148,7 @@ fun AnvilNav(vm: AnvilViewModel, dark: Boolean, activity: Activity) {
         composable("bin/{m}") { e -> val id = e.module(); Themed(id.scope(), id) { BinScreen(vm, id, onBack = { nav.popBackStack() }) } }
         composable("math") { Themed(Scope.GENERAL) { MathFormulasScreen(vm, onBack = { nav.popBackStack() }) } }
         composable("finance") { Themed(Scope.GENERAL) { FinancialTermsScreen(onBack = { nav.popBackStack() }) } }
-        composable("equation/{t}") { e -> Themed(Scope.ICT) { EquationScreen(vm, e.arg("t"), onBack = { nav.popBackStack() }) } }
+        composable("equation/{t}") { e -> Themed(Scope.ICT, ModuleId.ICT) { EquationScreen(vm, e.arg("t"), onBack = { nav.popBackStack() }) } }
         composable("practice/{cat}") { e ->
             Themed(Scope.ICT) { PracticeScreen(vm, e.arg("cat"), onBack = { nav.popBackStack() }) }
         }

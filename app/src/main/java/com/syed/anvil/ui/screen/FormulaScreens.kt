@@ -187,9 +187,20 @@ fun EquationScreen(vm: AnvilViewModel, topicId: String, onBack: () -> Unit) {
                 }
             }
             if (cover) CoverBanner()
+            val ctl = com.syed.anvil.ui.highlight.LocalHighlights.current
+            val saved by (ctl?.repo?.byUid ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyMap<String, List<com.syed.anvil.highlight.Highlight>>()) }).collectAsState()
+            val onPage = remember(saved) { saved.filterKeys { it.startsWith("equation:") } }
+            val owner = remember { Any() }
+            var clearNonce by remember { mutableIntStateOf(0) }
             FormulaPage(
                 PageKind.EQUATION, "web/equation_${topic.id}.body.html", p, p.isDark, cover,
                 scrollTo = target, scrollNonce = nonce, onSection = { active = it },
+                highlights = onPage, clearSelectionNonce = clearNonce,
+                onSelection = { uid, anchors ->
+                    ctl?.target = if (anchors.isEmpty()) ctl?.target?.takeIf { it.owner !== owner }
+                    else com.syed.anvil.ui.highlight.HlTarget.Add(owner, uid, anchors, anchors.joinToString(" ") { it.quote }) { clearNonce++ }
+                },
+                onMark = { _, ids, color -> ctl?.target = com.syed.anvil.ui.highlight.HlTarget.Edit(owner, ids, color) { } },
             )
         }
     }

@@ -12,3 +12,8 @@ button { font-family: inherit; }
 .eq-page { padding: 8px 10px 56px; }
 .mf-imp-btn svg { fill: none; }
 .mf-imp-btn.on svg { fill: currentColor; }
+/* Highlights painted by highlight.js (colours come from the --hl-* variables). */
+.hl-mark { border-radius: 3px; color: inherit; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.hl-whole { display: inline-block; }
+.hl-c-mint { background: var(--hl-mint); } .hl-c-amber { background: var(--hl-amber); }
+.hl-c-rose { background: var(--hl-rose); } .hl-c-violet { background: var(--hl-violet); }

@@ -28,11 +28,12 @@ import com.syed.anvil.ui.theme.TopicColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONObject
 
 /** Which pre-rendered page, and which wrapper its stylesheet expects. */
-enum class PageKind(val css: List<String>, val open: String, val close: String) {
+enum class PageKind(val css: List<String>, val open: String, val close: String, val highlights: Boolean = false) {
     MATH(listOf("mathformulas.css"), """<div class="mf-root"><div class="mf-wrap mf-cover-on">""", "</div></div>"),
-    EQUATION(listOf("equation.css"), """<div class="eq-page">""", "</div>"),
+    EQUATION(listOf("equation.css"), """<div class="eq-page">""", "</div>", highlights = true),
 }
 
 private fun hex(c: Color) = "#%06X".format(c.toArgb() and 0xFFFFFF)
@@ -51,6 +52,7 @@ internal fun themeVariables(p: Palette, dark: Boolean): String = buildString {
     v("hover-bg", rgba(p.primary, .07f)); v("surface-glass", rgba(p.surface, .97f)); v("shadow-sm", "0 1px 2px rgba(0,0,0,.05)")
     v("font-body", "'Plus Jakarta Sans','Noto Sans Bengali',system-ui,sans-serif"); v("font-display", "'Plus Jakarta Sans','Noto Sans Bengali',system-ui,sans-serif")
     for (n in 1..12) v("topic-$n", hex(TopicColors.of(n, dark)))
+    for (c in com.syed.anvil.highlight.HIGHLIGHT_COLORS) v("hl-$c", (if (dark) com.syed.anvil.ui.theme.Highlights.dark(c) else com.syed.anvil.ui.theme.Highlights.light(c)).fill.let { rgba(it, it.alpha) })
     append("}")
 }
 
@@ -66,7 +68,9 @@ private fun buildPage(ctx: Context, kind: PageKind, bodyAsset: String, p: Palett
         append("""<link rel="stylesheet" href="katex/katex.min.css"><style>${themeVariables(p, dark)}</style><link rel="stylesheet" href="base.css">""")
         kind.css.forEach { append("""<link rel="stylesheet" href="$it">""") }
         append("</head><body>").append(kind.open).append(body).append(kind.close)
-        append("<script>$init</script><script src=\"controller.js\"></script></body></html>")
+        append("<script>$init</script><script src=\"controller.js\"></script>")
+        if (kind.highlights) append("<script src=\"highlight.js\"></script>")
+        append("</body></html>")
     }
 }
 
@@ -75,11 +79,15 @@ private class Bridge(
     private val onToggle: () -> ((String) -> Unit),
     private val onSection: () -> ((String) -> Unit),
     private val onReady: () -> Unit,
+    private val onSelection: () -> ((String) -> Unit),
+    private val onMark: () -> ((String) -> Unit),
 ) {
     private val ui = Handler(Looper.getMainLooper())
     @JavascriptInterface fun toggleImportant(uid: String) { ui.post { onToggle()(uid) } }
     @JavascriptInterface fun onSection(id: String) { ui.post { onSection()(id) } }
     @JavascriptInterface fun onReady() { ui.post { onReady.invoke() } }
+    @JavascriptInterface fun onSelection(json: String) { ui.post { onSelection()(json) } }
+    @JavascriptInterface fun onMark(json: String) { ui.post { onMark()(json) } }
 }
 
 /**
@@ -101,6 +109,13 @@ fun FormulaPage(
     scrollNonce: Int = 0,
     onToggleImportant: (String) -> Unit = {},
     onSection: (String) -> Unit = {},
+    /** Saved highlights by question uid, painted onto the page (pages that support highlights only). */
+    highlights: Map<String, List<com.syed.anvil.highlight.Highlight>> = emptyMap(),
+    /** The page reports a selection ("" uid with no anchors when it is cleared). */
+    onSelection: (uid: String, anchors: List<com.syed.anvil.highlight.Anchored>) -> Unit = { _, _ -> },
+    /** A saved mark was tapped. */
+    onMark: (uid: String, ids: List<String>, color: String) -> Unit = { _, _, _ -> },
+    clearSelectionNonce: Int = 0,
 ) {
     val ctx = LocalContext.current
     // Rebuilt only when the theme changes; cover and stars are switched live through the page's own script.
@@ -111,6 +126,8 @@ fun FormulaPage(
     var ready by remember(html) { mutableStateOf(false) }
     val toggle = rememberUpdatedState(onToggleImportant)
     val section = rememberUpdatedState(onSection)
+    val selection = rememberUpdatedState(onSelection)
+    val mark = rememberUpdatedState(onMark)
     var web by remember { mutableStateOf<WebView?>(null) }
 
     val page = html
@@ -124,7 +141,9 @@ fun FormulaPage(
                 settings.setSupportZoom(false); settings.textZoom = 100
                 overScrollMode = WebView.OVER_SCROLL_NEVER
                 setBackgroundColor(palette.bg.toArgb())
-                addJavascriptInterface(Bridge({ toggle.value }, { section.value }, { ready = true }), "Anvil")
+                addJavascriptInterface(Bridge({ toggle.value }, { section.value }, { ready = true },
+                    { { json -> if (json.isEmpty()) selection.value("", emptyList()) else runCatching { val o = JSONObject(json); selection.value(o.getString("uid"), o.getJSONArray("anchors").let { a -> List(a.length()) { a.getJSONObject(it).let { x -> com.syed.anvil.highlight.Anchored(x.getString("block"), x.getInt("start"), x.getInt("end"), x.getString("quote")) } } }) } } },
+                    { { json -> runCatching { val o = JSONObject(json); mark.value(o.getString("uid"), o.getJSONArray("ids").let { a -> List(a.length()) { a.getString(it) } }, o.optString("color")) } } }), "Anvil")
                 // Nothing in these pages links anywhere; refuse any navigation rather than leave the page.
                 webViewClient = object : WebViewClient() {
                     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = true
@@ -147,5 +166,9 @@ fun FormulaPage(
     LaunchedEffect(w, ready, importantOnly) { if (ready) w?.evaluateJavascript("setImportantOnly($importantOnly)", null) }
     LaunchedEffect(w, ready, important) { if (ready) w?.evaluateJavascript("setImportant(${JSONArray(important.toList())})", null) }
     LaunchedEffect(w, ready, scrollNonce) { if (ready && scrollTo != null) w?.evaluateJavascript("scrollToId('${scrollTo.replace("'", "")}')", null) }
+    LaunchedEffect(w, ready, highlights) {
+        if (ready && kind.highlights) w?.evaluateJavascript("setHighlights(${JSONObject.quote(JSONObject(highlights.mapValues { (_, l) -> JSONArray(l.map { it.toJson().put("start", it.start).put("end", it.end) }) }).toString())})", null)
+    }
+    LaunchedEffect(w, clearSelectionNonce) { if (clearSelectionNonce > 0) w?.evaluateJavascript("clearSelection()", null) }
     DisposableEffect(Unit) { onDispose { web?.stopLoading() } }
 }
