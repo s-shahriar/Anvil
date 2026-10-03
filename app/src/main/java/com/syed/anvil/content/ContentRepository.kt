@@ -37,6 +37,8 @@ class ContentRepository(
     context: Context,
     val module: ModuleId,
     private val db: Postgrest,
+    /** Runs after a successful download, e.g. to fetch the images the new content references. */
+    private val onRefreshed: (ModuleContent) -> Unit = {},
 ) {
     private val file = File(context.filesDir, "content_${module.key}.jsonl")
     private val mutex = Mutex()
@@ -66,6 +68,7 @@ class ContentRepository(
             withContext(Dispatchers.IO) { writeCache(fresh) }
             _state.value = ContentState.Ready(fresh)
             _sync.value = SyncState.Idle
+            onRefreshed(fresh)
         } catch (e: Exception) {
             _sync.value = SyncState.Failed(e.message ?: "Download failed")
         }

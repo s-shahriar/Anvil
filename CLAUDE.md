@@ -49,7 +49,16 @@ Three scopes in `ui/theme/Palette.kt`: `SHELL` (rust, the Anvil home/settings), 
 
 ## Roadmap
 1. ✅ Foundation: project, three themes, two backends, uid hash, offline content + progress queue, updater.
-2. General module: quiz, study, exam, pool chooser, search, vocabulary, written data, utility pages.
-3. ICT MCQ + Written/Extra/Viva rendering (code blocks, ASCII diagrams, tables, nine answer-block types).
-4. Practice (Linux/SQL drill), Equation (KaTeX + diagrams, bundled), highlights (offset anchoring, keep web compatible), notes.
+2. ✅ Quiz core (works for General and ICT MCQ): topic mode select + pool chooser, MCQ quiz, study (paged, filters, search),
+   exam (setup + run, two-tap stop), Nailed/Important lists, group search, notes, HTML rendering with offline images.
+   Still to do for General: LiveMCQ sub-topic switcher, `written_categories/cards` data page, Utility pages (math formulas
+   with KaTeX, financial terms), left/right-hand layout toggle, recycle bin.
+3. ICT Written/Extra/Viva rendering (code blocks, ASCII diagrams, tables, nine answer-block types). Their cards are already
+   cached offline; `ModeSelectScreen` shows a placeholder for them.
+4. Practice (Linux/SQL drill), Equation (KaTeX + diagrams, bundled), highlights (offset anchoring, keep web compatible).
 5. Mobile extras (reminders, streaks, spaced repetition, timed exams).
+
+## Testing notes
+- Unit tests cover uid hashing, flag rules/queue, HTML parsing, pools/search, updater helpers (27 tests).
+- Smoke-tested on the `Medium_Phone_API_36.1` emulator: download, offline relaunch in airplane mode, quiz, exam.
+  Not yet exercised: Google sign-in and server sync (need the Google client IDs), image rendering, study/saved screens by hand.

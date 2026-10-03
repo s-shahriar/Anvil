@@ -6,20 +6,36 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.syed.anvil.backend.ModuleId
+import com.syed.anvil.content.PoolSet
+import com.syed.anvil.ui.screen.ExamConfigScreen
+import com.syed.anvil.ui.screen.ExamRunScreen
 import com.syed.anvil.ui.screen.HomeScreen
+import com.syed.anvil.ui.screen.ModeSelectScreen
+import com.syed.anvil.ui.screen.ModuleNav
 import com.syed.anvil.ui.screen.ModuleScreen
+import com.syed.anvil.ui.screen.QuizScreen
+import com.syed.anvil.ui.screen.SavedScreen
 import com.syed.anvil.ui.screen.SettingsScreen
-import com.syed.anvil.ui.screen.TopicScreen
+import com.syed.anvil.ui.screen.StudyScreen
 import com.syed.anvil.ui.theme.AnvilTheme
 import com.syed.anvil.ui.theme.Scope
 
 private fun ModuleId.scope() = if (this == ModuleId.GENERAL) Scope.GENERAL else Scope.ICT
+private fun NavBackStackEntry.module() = ModuleId.entries.first { it.key == arguments!!.getString("m") }
+private fun NavBackStackEntry.arg(name: String) = arguments!!.getString(name)!!
+
+/** Back to the module's own screen, whatever sits above it. */
+private fun NavHostController.toModuleHome(id: ModuleId) {
+    if (!popBackStack("module/${id.key}", inclusive = false)) navigate("module/${id.key}")
+}
 
 /** Each destination is wrapped in its own scope: rust for the shell, marigold for General, blue for ICT. */
 @Composable
@@ -40,18 +56,56 @@ fun AnvilNav(vm: AnvilViewModel, dark: Boolean, activity: Activity) {
         composable("settings") {
             Themed(Scope.SHELL) { SettingsScreen(vm, activity, onBack = { nav.popBackStack() }) }
         }
-        composable("module/{id}", listOf(navArgument("id") { type = NavType.StringType })) { entry ->
-            val id = ModuleId.entries.first { it.key == entry.arguments!!.getString("id") }
+        composable("module/{m}") { e ->
+            val id = e.module()
             Themed(id.scope()) {
-                ModuleScreen(vm, id, onBack = { nav.popBackStack() }, onTopic = { g, t -> nav.navigate("topic/${id.key}/$g/$t") })
+                ModuleScreen(
+                    vm, id,
+                    ModuleNav(
+                        onBack = { nav.popBackStack() },
+                        onTopic = { g, t -> nav.navigate("topic/${id.key}/$g/$t") },
+                        onExam = { g -> nav.navigate("exam/${id.key}?group=$g") },
+                        onSaved = { kind, g -> nav.navigate("saved/${id.key}/${kind.key}/$g") },
+                        onSearchHit = { item -> nav.navigate("study/${id.key}/${item.group}/${item.topic}?focus=${item.uid ?: ""}") },
+                    ),
+                )
             }
         }
-        composable("topic/{id}/{group}/{topic}") { entry ->
-            val a = entry.arguments!!
-            val id = ModuleId.entries.first { it.key == a.getString("id") }
+        composable("topic/{m}/{g}/{t}") { e ->
+            val id = e.module(); val g = e.arg("g"); val t = e.arg("t")
             Themed(id.scope()) {
-                TopicScreen(vm, id, a.getString("group")!!, a.getString("topic")!!, onBack = { nav.popBackStack() })
+                ModeSelectScreen(
+                    vm, id, g, t, onBack = { nav.popBackStack() },
+                    onQuiz = { set -> nav.navigate("quiz/${id.key}/$g/$t?set=${set.key}") },
+                    onStudy = { nav.navigate("study/${id.key}/$g/$t") },
+                )
             }
+        }
+        composable("quiz/{m}/{g}/{t}?set={set}", listOf(navArgument("set") { type = NavType.StringType; defaultValue = "all" })) { e ->
+            val id = e.module()
+            Themed(id.scope()) {
+                QuizScreen(vm, id, e.arg("g"), e.arg("t"), PoolSet.of(e.arguments!!.getString("set")), onBack = { nav.popBackStack() }, onHome = { nav.toModuleHome(id) })
+            }
+        }
+        composable("study/{m}/{g}/{t}?focus={focus}", listOf(navArgument("focus") { type = NavType.StringType; nullable = true; defaultValue = null })) { e ->
+            val id = e.module()
+            Themed(id.scope()) {
+                StudyScreen(vm, id, e.arg("g"), e.arg("t"), e.arguments!!.getString("focus")?.ifEmpty { null }, onBack = { nav.popBackStack() })
+            }
+        }
+        composable("exam/{m}?group={group}", listOf(navArgument("group") { type = NavType.StringType; nullable = true; defaultValue = null })) { e ->
+            val id = e.module()
+            Themed(id.scope()) {
+                ExamConfigScreen(vm, id, e.arguments!!.getString("group"), onBack = { nav.popBackStack() }, onStart = { nav.navigate("examrun/${id.key}") })
+            }
+        }
+        composable("examrun/{m}") { e ->
+            val id = e.module()
+            Themed(id.scope()) { ExamRunScreen(vm, onBack = { nav.popBackStack() }, onHome = { nav.toModuleHome(id) }) }
+        }
+        composable("saved/{m}/{kind}/{g}") { e ->
+            val id = e.module()
+            Themed(id.scope()) { SavedScreen(vm, id, PoolSet.of(e.arg("kind")), e.arg("g"), onBack = { nav.popBackStack() }) }
         }
     }
 }

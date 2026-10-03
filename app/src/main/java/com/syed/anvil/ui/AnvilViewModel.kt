@@ -23,6 +23,9 @@ import java.io.File
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
+/** The exam being taken. Held in memory only, so a relaunch returns to the setup screen, as on the web. */
+class ExamSpec(val module: ModuleId, val items: List<com.syed.anvil.content.Item>, val label: String?)
+
 sealed interface UpdateState {
     data object Idle : UpdateState
     data object Checking : UpdateState
@@ -46,6 +49,8 @@ class AnvilViewModel(private val app: Application) : AndroidViewModel(app) {
     fun setTheme(mode: ThemeMode) { themeMode = mode; prefs.edit().putString("theme", mode.name).apply() }
 
     fun module(id: ModuleId) = anvil.module(id)
+
+    var exam: ExamSpec? = null
 
     init {
         // A new version is running: its APK from the last update is no longer needed.
