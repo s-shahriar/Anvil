@@ -5,6 +5,12 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.LruCache
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
@@ -23,6 +29,13 @@ class ImageStore(context: Context) {
 
     private fun fileFor(url: String) = File(dir, MessageDigest.getInstance("SHA-1").digest(url.toByteArray()).joinToString("") { "%02x".format(it) })
 
+    private val _count = MutableStateFlow(dir.listFiles { f -> !f.name.endsWith(".tmp") }?.size ?: 0)
+    /** How many images are saved on the device. */
+    val cachedCount: StateFlow<Int> = _count
+    private val prefetching = Mutex()
+
+    fun has(url: String) = fileFor(url).exists()
+
     val bytes: Long get() = dir.listFiles()?.sumOf { it.length() } ?: 0L
 
     /** From memory, then disk, then (if [allowNetwork]) the web. Null when unavailable. */
@@ -34,11 +47,20 @@ class ImageStore(context: Context) {
         decode(f)?.also { memory.put(url, it) } ?: run { f.delete(); null }
     }
 
+    /**
+     * Fetches whichever of [urls] are not saved yet, four at a time. Safe to call again and again: it skips what is
+     * there, and does nothing while another run is in progress, so an interrupted run is simply resumed next time.
+     */
     suspend fun prefetch(urls: Collection<String>) = withContext(Dispatchers.IO) {
-        for (u in urls) { val f = fileFor(u); if (!f.exists()) download(u, f) }
+        if (!prefetching.tryLock()) return@withContext
+        try {
+            urls.filter { !has(it) }.chunked(4).forEach { chunk ->
+                coroutineScope { chunk.map { u -> async { download(u, fileFor(u)) } }.awaitAll() }
+            }
+        } finally { prefetching.unlock() }
     }
 
-    fun clear() { dir.listFiles()?.forEach { it.delete() }; memory.evictAll() }
+    fun clear() { dir.listFiles()?.forEach { it.delete() }; memory.evictAll(); _count.value = 0 }
 
     private fun download(url: String, target: File) {
         val tmp = File(target.parentFile, target.name + ".tmp")
@@ -48,7 +70,7 @@ class ImageStore(context: Context) {
             try {
                 if (c.responseCode !in 200..299) return
                 c.inputStream.use { i -> tmp.outputStream().use { o -> i.copyTo(o) } }
-                tmp.renameTo(target)
+                if (tmp.renameTo(target)) _count.value = dir.listFiles { f -> !f.name.endsWith(".tmp") }?.size ?: 0
             } finally { c.disconnect() }
         }
         tmp.delete()

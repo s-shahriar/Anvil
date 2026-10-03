@@ -16,6 +16,12 @@ val Jakarta = FontFamily(
     Font(R.font.plus_jakarta_sans_bold, FontWeight.Bold),
 )
 
+/** Code and ASCII diagrams. Covers box-drawing and block characters; Bangla falls back to the system font. */
+val Mono = FontFamily(
+    Font(R.font.jetbrains_mono_regular, FontWeight.Normal),
+    Font(R.font.jetbrains_mono_medium, FontWeight.Medium),
+)
+
 private fun s(weight: FontWeight, size: Int, line: Int, tracking: Double = 0.0) = TextStyle(
     fontFamily = Jakarta, fontWeight = weight, fontSize = size.sp, lineHeight = line.sp, letterSpacing = tracking.sp,
 )

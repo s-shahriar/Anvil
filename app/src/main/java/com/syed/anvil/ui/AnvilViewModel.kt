@@ -75,8 +75,12 @@ class AnvilViewModel(private val app: Application) : AndroidViewModel(app) {
         if (online.value && (m.content.state.value is ContentState.Empty || stale)) {
             m.content.refresh()
         }
+        // A download that was cut short (app closed, connection lost) is topped up here.
+        if (online.value) (m.content.state.value as? ContentState.Ready)?.let { m.prefetchImages(it.content) }
         if (m.auth.session.value != null) runCatching { m.progress.pull() }
     }
+
+    val imagesSaved get() = anvil.images.cachedCount
 
     fun refreshContent(id: ModuleId) = viewModelScope.launch { anvil.module(id).content.refresh() }
     fun clearContent(id: ModuleId) = viewModelScope.launch { anvil.module(id).content.clear() }

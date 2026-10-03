@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -48,6 +49,7 @@ import com.syed.anvil.ui.AnvilViewModel
 import com.syed.anvil.ui.component.Pager
 import com.syed.anvil.ui.quiz.StudyCard
 import com.syed.anvil.ui.theme.LocalPalette
+import kotlinx.coroutines.launch
 
 private const val PAGE = 20
 
@@ -85,6 +87,7 @@ fun StudyScreen(vm: AnvilViewModel, id: ModuleId, group: String, topic: String, 
     val pages = maxOf(1, (visible.size + PAGE - 1) / PAGE)
     val shown = visible.drop(page.coerceAtMost(pages - 1) * PAGE).take(PAGE)
     val list = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
     // Deep link from search: jump to the page holding the question, and scroll to it.
     LaunchedEffect(focus, visible) {
@@ -122,7 +125,8 @@ fun StudyScreen(vm: AnvilViewModel, id: ModuleId, group: String, topic: String, 
             items(shown, key = { it.id }) { item ->
                 StudyCard(id, item, item.uid?.let(flags::get) ?: Flag(), m.progress, highlighted = item.uid == focus)
             }
-            item { Pager(page.coerceAtMost(pages - 1), pages) { page = it } }
+            // A new page starts at its first question, not wherever the old one was scrolled to.
+            item { Pager(page.coerceAtMost(pages - 1), pages) { page = it; scope.launch { list.scrollToItem(0) } } }
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.syed.anvil.ui
 
 import android.app.Activity
+import android.net.Uri
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -14,6 +15,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.syed.anvil.backend.ModuleId
+import com.syed.anvil.content.LongForm
 import com.syed.anvil.content.PoolSet
 import com.syed.anvil.ui.screen.ExamConfigScreen
 import com.syed.anvil.ui.screen.ExamRunScreen
@@ -22,6 +24,7 @@ import com.syed.anvil.ui.screen.ModeSelectScreen
 import com.syed.anvil.ui.screen.ModuleNav
 import com.syed.anvil.ui.screen.ModuleScreen
 import com.syed.anvil.ui.screen.QuizScreen
+import com.syed.anvil.ui.screen.ReaderScreen
 import com.syed.anvil.ui.screen.SavedScreen
 import com.syed.anvil.ui.screen.SettingsScreen
 import com.syed.anvil.ui.screen.StudyScreen
@@ -63,10 +66,13 @@ fun AnvilNav(vm: AnvilViewModel, dark: Boolean, activity: Activity) {
                     vm, id,
                     ModuleNav(
                         onBack = { nav.popBackStack() },
-                        onTopic = { g, t -> nav.navigate("topic/${id.key}/$g/$t") },
+                        onTopic = { g, t -> nav.navigate(if (LongForm.isLongForm(g)) "read/${id.key}/$g/$t" else "topic/${id.key}/$g/$t") },
                         onExam = { g -> nav.navigate("exam/${id.key}?group=$g") },
                         onSaved = { kind, g -> nav.navigate("saved/${id.key}/${kind.key}/$g") },
-                        onSearchHit = { item -> nav.navigate("study/${id.key}/${item.group}/${item.topic}?focus=${item.uid ?: ""}") },
+                        onSearchHit = { item ->
+                            val dest = if (LongForm.isLongForm(item)) "read" else "study"
+                            nav.navigate("$dest/${id.key}/${item.group}/${item.topic}?focus=${Uri.encode(item.uid ?: "")}")
+                        },
                     ),
                 )
             }
@@ -91,6 +97,28 @@ fun AnvilNav(vm: AnvilViewModel, dark: Boolean, activity: Activity) {
             val id = e.module()
             Themed(id.scope()) {
                 StudyScreen(vm, id, e.arg("g"), e.arg("t"), e.arguments!!.getString("focus")?.ifEmpty { null }, onBack = { nav.popBackStack() })
+            }
+        }
+        composable(
+            "read/{m}/{g}/{t}?segment={segment}&focus={focus}",
+            listOf(
+                navArgument("segment") { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument("focus") { type = NavType.StringType; nullable = true; defaultValue = null },
+            ),
+        ) { e ->
+            val id = e.module(); val g = e.arg("g"); val t = e.arg("t")
+            val focus = e.arguments!!.getString("focus")?.ifEmpty { null }
+            Themed(id.scope()) {
+                ReaderScreen(
+                    vm, id, g, t, e.arguments!!.getString("segment"), focus,
+                    onBack = { nav.popBackStack() },
+                    onSegment = { seg -> nav.navigate("read/${id.key}/$g/$t?segment=${Uri.encode(seg)}") },
+                    // From a search hit: replace this page with the segment page that holds the question.
+                    onFocusSegment = { seg ->
+                        nav.popBackStack()
+                        nav.navigate("read/${id.key}/$g/$t?segment=${Uri.encode(seg)}&focus=${Uri.encode(focus ?: "")}")
+                    },
+                )
             }
         }
         composable("exam/{m}?group={group}", listOf(navArgument("group") { type = NavType.StringType; nullable = true; defaultValue = null })) { e ->

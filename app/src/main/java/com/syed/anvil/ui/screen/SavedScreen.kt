@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
@@ -30,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -38,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import com.syed.anvil.backend.ModuleId
 import com.syed.anvil.content.ContentState
 import com.syed.anvil.content.Item
+import com.syed.anvil.content.LongForm
+import com.syed.anvil.ui.reader.LongCard
 import com.syed.anvil.content.PoolSet
 import com.syed.anvil.content.QuizPool
 import com.syed.anvil.progress.Flag
@@ -45,6 +49,7 @@ import com.syed.anvil.progress.FlagRules
 import com.syed.anvil.ui.AnvilViewModel
 import com.syed.anvil.ui.component.Pager
 import com.syed.anvil.ui.quiz.StudyCard
+import kotlinx.coroutines.launch
 
 private const val PAGE = 20
 
@@ -63,6 +68,9 @@ fun SavedScreen(vm: AnvilViewModel, id: ModuleId, kind: PoolSet, group: String, 
     var weakOnly by rememberSaveable { mutableStateOf(false) }
     var page by rememberSaveable { mutableIntStateOf(0) }
     var confirmClear by remember { mutableStateOf(false) }
+    val list = rememberLazyListState()
+    val uiScope = rememberCoroutineScope()
+    var openCards by rememberSaveable { mutableStateOf(listOf<String>()) }
 
     val scope = remember(content, group) {
         content?.groups?.filter { group == "all" || it.key == group }.orEmpty()
@@ -71,7 +79,7 @@ fun SavedScreen(vm: AnvilViewModel, id: ModuleId, kind: PoolSet, group: String, 
     val set = if (kind == PoolSet.IMPORTANT && weakOnly) PoolSet.WEAK else kind
     val saved: List<Item> = remember(content, scope, flags, set) {
         scope.flatMap { g -> g.topics.flatMap { content!!.items(g.key, it.slug) } }
-            .filter { it.isQuizzable && QuizPool.matches(set, it.uid?.let(flags::get)) }
+            .filter { (it.isQuizzable || LongForm.isLongForm(it)) && QuizPool.matches(set, it.uid?.let(flags::get)) }
     }
     val perTopic = remember(saved) { saved.groupingBy { "${it.group}/${it.topic}" }.eachCount() }
     val shownItems = remember(saved, topic) { if (topic == null) saved else saved.filter { "${it.group}/${it.topic}" == topic } }
@@ -89,7 +97,7 @@ fun SavedScreen(vm: AnvilViewModel, id: ModuleId, kind: PoolSet, group: String, 
         },
     ) { pad ->
         LazyColumn(
-            Modifier.fillMaxSize().padding(pad), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            Modifier.fillMaxSize().padding(pad), state = list, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
@@ -110,9 +118,16 @@ fun SavedScreen(vm: AnvilViewModel, id: ModuleId, kind: PoolSet, group: String, 
             }
             if (shownItems.isEmpty()) item { Text("Nothing here yet.", Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge) }
             items(shownItems.drop(page.coerceAtMost(pages - 1) * PAGE).take(PAGE), key = { it.id }) { item ->
-                StudyCard(id, item, item.uid?.let(flags::get) ?: Flag(), m.progress, topicLabel = topicNames["${item.group}/${item.topic}"])
+                val label = topicNames["${item.group}/${item.topic}"]
+                if (LongForm.isLongForm(item)) {
+                    val key = item.uid ?: item.id
+                    LongCard(item, null, key in openCards, item.uid?.let(flags::get) ?: Flag(), m.progress,
+                        onToggle = { openCards = if (key in openCards) openCards - key else openCards + key }, topicLabel = label)
+                } else {
+                    StudyCard(id, item, item.uid?.let(flags::get) ?: Flag(), m.progress, topicLabel = label)
+                }
             }
-            item { Pager(page.coerceAtMost(pages - 1), pages) { page = it } }
+            item { Pager(page.coerceAtMost(pages - 1), pages) { page = it; uiScope.launch { list.scrollToItem(0) } } }
         }
     }
 

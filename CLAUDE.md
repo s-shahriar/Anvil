@@ -53,10 +53,20 @@ Three scopes in `ui/theme/Palette.kt`: `SHELL` (rust, the Anvil home/settings), 
    exam (setup + run, two-tap stop), Nailed/Important lists, group search, notes, HTML rendering with offline images.
    Still to do for General: LiveMCQ sub-topic switcher, `written_categories/cards` data page, Utility pages (math formulas
    with KaTeX, financial terms), left/right-hand layout toggle, recycle bin.
-3. ICT Written/Extra/Viva rendering (code blocks, ASCII diagrams, tables, nine answer-block types). Their cards are already
-   cached offline; `ModeSelectScreen` shows a placeholder for them.
+3. ✅ ICT Written/Extra/Viva reader (`ui/reader`, `ReaderScreen`): accordion cards, segments + sub-segments, hanging-indent
+   questions, all answer blocks (code with highlighting, image, summary, points, ASCII diagram, table, mistakes, mnemonic,
+   extended), search into answers with deep-link, flags/notes, resumable offline picture cache.
 4. Practice (Linux/SQL drill), Equation (KaTeX + diagrams, bundled), highlights (offset anchoring, keep web compatible).
 5. Mobile extras (reminders, streaks, spaced repetition, timed exams).
+
+## Open items (check later)
+- **Picture questions are not verified on screen.** All 129 images referenced by General are cached on the device (20 MB), but
+  nobody has looked at one rendered. Where to look: General > LiveMCQ > মানসিক দক্ষতা (`lm_mental_ability`) > Study, page 4,
+  first card ("Group the given figures into three classes…"); also the quiz screen and an image inside an explanation.
+  Check size/aspect, dark mode, and the "Image not available offline" placeholder with the cache cleared.
+- Not yet looked at by hand: Extra and Viva readers, the Nailed/Important lists for long-form cards, Settings "Pictures: x of y",
+  dark theme on the new screens, tablets / large font sizes.
+- Left/right-hand toggle, recycle bin, LiveMCQ sub-topic switcher, General written-data page, Utility pages: not built yet.
 
 ## Testing notes
 - Unit tests cover uid hashing, flag rules/queue, HTML parsing, pools/search, updater helpers (27 tests).

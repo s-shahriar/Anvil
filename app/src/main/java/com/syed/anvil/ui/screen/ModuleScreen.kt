@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
@@ -40,6 +41,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -52,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import com.syed.anvil.backend.ModuleId
 import com.syed.anvil.content.ContentState
 import com.syed.anvil.content.Item
+import com.syed.anvil.content.LongForm
 import com.syed.anvil.content.ModuleContent
 import com.syed.anvil.content.PoolSet
 import com.syed.anvil.content.QuizPool
@@ -66,6 +69,7 @@ import com.syed.anvil.ui.rich.HtmlParser
 import com.syed.anvil.ui.theme.LocalPalette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class ModuleNav(
@@ -153,8 +157,8 @@ private fun ModuleBody(id: ModuleId, content: ModuleContent, flags: Map<String, 
     val p = LocalPalette.current
     var selected by rememberSaveable { mutableStateOf(content.groups.firstOrNull()?.key) }
     val group = content.groups.firstOrNull { it.key == selected } ?: content.groups.firstOrNull() ?: return
-    val groupItems = remember(content, group) { group.topics.flatMap { content.items(group.key, it.slug) }.filter { it.isQuizzable } }
-    val counts = remember(groupItems, flags) { QuizPool.counts(groupItems, flags) }
+    val groupItems = remember(content, group) { group.topics.flatMap { content.items(group.key, it.slug) }.filter { it.isQuizzable || LongForm.isLongForm(it) } }
+    val counts = remember(groupItems, flags) { QuizPool.counts(groupItems, flags, includeLongForm = true) }
     val topicNames = remember(group) { group.topics.associate { it.slug to it.name } }
 
     var query by rememberSaveable { mutableStateOf("") }
@@ -170,10 +174,13 @@ private fun ModuleBody(id: ModuleId, content: ModuleContent, flags: Map<String, 
         if (tokens.isEmpty()) emptyList() else groupItems.filter { SearchText.matches(haystacks[it.id].orEmpty(), tokens) }
     }
 
-    LazyColumn(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    val list = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    LazyColumn(state = list, contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Action(Icons.Filled.Timer, "Exam", null, MaterialTheme.colorScheme.primary, Modifier.weight(1f)) { nav.onExam(group.key) }
+                // Exams draw multiple-choice questions only; Written/Extra/Viva have none.
+                if (!LongForm.isLongForm(group.key)) Action(Icons.Filled.Timer, "Exam", null, MaterialTheme.colorScheme.primary, Modifier.weight(1f)) { nav.onExam(group.key) }
                 Action(Icons.Filled.Star, "Nailed", counts.getValue(PoolSet.NAILED), p.ok, Modifier.weight(1f)) { nav.onSaved(PoolSet.NAILED, group.key) }
                 Action(Icons.Filled.Bookmark, "Important", counts.getValue(PoolSet.IMPORTANT), p.imp, Modifier.weight(1f)) { nav.onSaved(PoolSet.IMPORTANT, group.key) }
             }
@@ -204,7 +211,7 @@ private fun ModuleBody(id: ModuleId, content: ModuleContent, flags: Map<String, 
                     Text(text, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
             }
-            item { Pager(page.coerceAtMost(pages - 1), pages) { page = it } }
+            item { Pager(page.coerceAtMost(pages - 1), pages) { page = it; scope.launch { list.scrollToItem(2) } } }
         } else {
             items(group.topics, key = { it.key }) { t ->
                 Row(

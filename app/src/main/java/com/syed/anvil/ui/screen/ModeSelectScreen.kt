@@ -46,9 +46,6 @@ import com.syed.anvil.content.TopicCatalog
 import com.syed.anvil.ui.AnvilViewModel
 import com.syed.anvil.ui.theme.LocalPalette
 
-/** ICT groups whose cards are long-form answers: they get their own reader in a later phase. */
-private val longFormGroups = setOf("written", "extra", "viva")
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModeSelectScreen(
@@ -77,12 +74,6 @@ fun ModeSelectScreen(
         },
     ) { pad ->
         Column(Modifier.fillMaxSize().padding(pad).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            if (group in longFormGroups && id == ModuleId.ICT) {
-                Text("${items.size} cards", style = MaterialTheme.typography.titleMedium)
-                Text("Written, Extra and Viva answers (code, diagrams, tables) are coming in the next update. They're already saved on this phone.",
-                    style = MaterialTheme.typography.bodyMedium, color = p.text3)
-                return@Column
-            }
             ModeCard(Icons.Filled.PlayArrow, "MCQ Mode", "প্রশ্ন একটি একটি করে উত্তর দাও। তাৎক্ষণিক ঠিক/ভুল ফিডব্যাক ও স্কোর।",
                 "$quizzable questions", quizzable > 0) {
                 // Only offer the pool chooser when there is something to choose between.

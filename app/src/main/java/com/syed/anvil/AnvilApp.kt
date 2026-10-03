@@ -16,14 +16,17 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 /** Everything one module needs: its own Supabase project, auth session, offline content and progress. */
-class ModuleServices(app: Application, val id: ModuleId, scope: CoroutineScope, images: ImageStore) {
+class ModuleServices(app: Application, val id: ModuleId, private val scope: CoroutineScope, private val images: ImageStore) {
     val config = Backends.of(id)
     val auth = SupabaseAuth(app, config)
     val db = Postgrest(config, auth)
-    val content = ContentRepository(app, id, db) { fresh ->
-        // Pictures are fetched in the background so questions that use them still work offline.
-        scope.launch { images.prefetch(fresh.allItems().flatMap { ImageStore.urlsIn(it) }.toSet()) }
-    }
+    val content = ContentRepository(app, id, db) { fresh -> prefetchImages(fresh) }
+
+    /** Every image this module's questions use. */
+    fun imageUrls(c: com.syed.anvil.content.ModuleContent): Set<String> = c.allItems().flatMap { ImageStore.urlsIn(it) }.toSet()
+
+    /** Pictures are fetched in the background so questions that use them still work offline; resumes if cut short. */
+    fun prefetchImages(c: com.syed.anvil.content.ModuleContent) { scope.launch { images.prefetch(imageUrls(c)) } }
     val progress = ProgressRepository(app, id, auth, db, scope)
 }
 

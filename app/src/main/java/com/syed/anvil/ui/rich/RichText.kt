@@ -93,7 +93,7 @@ fun PlainQuestionText(text: String, modifier: Modifier = Modifier, style: TextSt
         if (nl >= 0) {
             val p = LocalPalette.current
             Box(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(p.elevated).horizontalScroll(rememberScrollState()).padding(12.dp)) {
-                Text(text.substring(nl + 1).trimEnd(), style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 19.sp), softWrap = false)
+                Text(text.substring(nl + 1).trimEnd(), style = MaterialTheme.typography.bodyMedium.copy(fontFamily = com.syed.anvil.ui.theme.Mono, fontSize = 13.sp, lineHeight = 19.sp), softWrap = false)
             }
         }
     }

@@ -24,8 +24,9 @@ object QuizPool {
     fun build(items: List<Item>, flags: Map<String, Flag>, set: PoolSet, random: Random = Random): List<Item> =
         items.filter { it.isQuizzable && matches(set, it.uid?.let(flags::get)) }.shuffled(random)
 
-    fun counts(items: List<Item>, flags: Map<String, Flag>): Map<PoolSet, Int> {
-        val q = items.filter { it.isQuizzable }
+    /** Pool sizes. Long-form cards (Written/Extra/Viva) are never quizzed but are flagged just the same, so [includeLongForm] counts them. */
+    fun counts(items: List<Item>, flags: Map<String, Flag>, includeLongForm: Boolean = false): Map<PoolSet, Int> {
+        val q = items.filter { it.isQuizzable || (includeLongForm && LongForm.isLongForm(it)) }
         return PoolSet.entries.associateWith { s -> q.count { matches(s, it.uid?.let(flags::get)) } }
     }
 }
@@ -61,7 +62,8 @@ object SearchText {
     /** Everything searchable about a question, normalised once. Tags are stripped cheaply: this is only for matching. */
     fun haystack(item: Item): String {
         val parts = ArrayList<String>(8)
-        parts.add(item.data.optString("question")); item.explanation?.let(parts::add)
+        parts.add(item.question); item.explanation?.let(parts::add)
+        if (LongForm.isLongForm(item)) parts.add(LongForm.answerText(item))
         item.data.optJSONObject("options")?.let { o -> o.keys().forEach { parts.add(o.optString(it)) } }
         return normalize(parts.joinToString(" ").replace(tags, " "))
     }

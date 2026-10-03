@@ -27,6 +27,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
@@ -97,6 +98,11 @@ private fun ModuleSection(vm: AnvilViewModel, activity: Activity, id: ModuleId) 
             },
             style = MaterialTheme.typography.bodyMedium,
         )
+        val saved by vm.imagesSaved.collectAsState()
+        ((state as? ContentState.Ready)?.content)?.let { c ->
+            val total = remember(c) { m.imageUrls(c).size }
+            if (total > 0) Text("Pictures: ${minOf(saved, total)} of $total saved", style = MaterialTheme.typography.bodySmall, color = p.text3)
+        }
         (sync as? SyncState.Running)?.let { Text(it.message, style = MaterialTheme.typography.labelMedium, color = p.text3) }
         (sync as? SyncState.Failed)?.let { Text(it.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
