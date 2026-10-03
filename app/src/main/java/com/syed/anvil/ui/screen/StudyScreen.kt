@@ -1,6 +1,8 @@
 package com.syed.anvil.ui.screen
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +24,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -36,6 +39,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.syed.anvil.backend.ModuleId
 import com.syed.anvil.content.ContentState
@@ -43,6 +47,7 @@ import com.syed.anvil.content.Item
 import com.syed.anvil.content.PoolSet
 import com.syed.anvil.content.QuizPool
 import com.syed.anvil.content.SearchText
+import com.syed.anvil.content.Subtopics
 import com.syed.anvil.content.TopicCatalog
 import com.syed.anvil.progress.Flag
 import com.syed.anvil.ui.AnvilViewModel
@@ -69,13 +74,22 @@ fun StudyScreen(vm: AnvilViewModel, id: ModuleId, group: String, topic: String, 
     var showNailed by rememberSaveable { mutableStateOf(focus != null) }
     var query by rememberSaveable { mutableStateOf("") }
     var page by rememberSaveable { mutableIntStateOf(0) }
+    // LiveMCQ topics can also be browsed by sub-topic (সন্ধি, সমাস …): a picker first, then that sub-topic's questions.
+    val subList = remember(content, group, topic) { if (group == "livemcq") content?.subtopicsFor(topic).orEmpty() else emptyList() }
+    var bySub by rememberSaveable { mutableStateOf(false) }
+    var activeSub by rememberSaveable { mutableStateOf<String?>(null) }
     val haystacks = remember(all) { all.associate { it.id to SearchText.haystack(it) } }
     val tokens = SearchText.tokens(query)
 
-    val visible = remember(all, flags, filter, showNailed, tokens) {
+    val subtopicCards = remember(all, flags, subList) {
+        Subtopics.cards(all.filter { flags[it.uid]?.nailed != true }, subList)
+    }
+    val showPicker = bySub && activeSub == null && subList.isNotEmpty()
+    val visible = remember(all, flags, filter, showNailed, tokens, bySub, activeSub) {
         all.filter { item ->
             val f = item.uid?.let(flags::get)
-            (showNailed || f?.nailed != true) &&
+            (!bySub || activeSub == null || Subtopics.inSubtopic(item, activeSub!!, subList)) &&
+                (showNailed || f?.nailed != true) &&
                 when (filter) {
                     StudyFilter.ALL -> true
                     StudyFilter.IMPORTANT -> QuizPool.matches(PoolSet.IMPORTANT, f)
@@ -122,11 +136,39 @@ fun StudyScreen(vm: AnvilViewModel, id: ModuleId, group: String, topic: String, 
                     Text("${visible.size} of ${all.size} questions", style = MaterialTheme.typography.labelMedium, color = LocalPalette.current.text3)
                 }
             }
-            items(shown, key = { it.id }) { item ->
-                StudyCard(id, item, item.uid?.let(flags::get) ?: Flag(), m.progress, highlighted = item.uid == focus)
+            if (subList.isNotEmpty()) item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(!bySub, { bySub = false; activeSub = null; page = 0 }, { Text("সব একসাথে") })
+                    FilterChip(bySub, { bySub = true; activeSub = null; page = 0 }, { Text("Sub-topic অনুযায়ী") })
+                }
             }
-            // A new page starts at its first question, not wherever the old one was scrolled to.
-            item { Pager(page.coerceAtMost(pages - 1), pages) { page = it; scope.launch { list.scrollToItem(0) } } }
+            if (showPicker) {
+                items(subtopicCards, key = { it.first.slug }) { (sub, n) ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).background(LocalPalette.current.surface)
+                            .clickable { activeSub = sub.slug; page = 0 }.padding(horizontal = 18.dp, vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(sub.name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                        Text("$n", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            } else {
+                if (bySub && activeSub != null) item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { activeSub = null; page = 0 }) { Text("‹ সব sub-topic") }
+                        Text(
+                            if (activeSub == Subtopics.NONE) Subtopics.NONE_NAME else subList.firstOrNull { it.slug == activeSub }?.name.orEmpty(),
+                            style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+                items(shown, key = { it.id }) { item ->
+                    StudyCard(id, item, item.uid?.let(flags::get) ?: Flag(), m.progress, highlighted = item.uid == focus)
+                }
+                // A new page starts at its first question, not wherever the old one was scrolled to.
+                item { Pager(page.coerceAtMost(pages - 1), pages) { page = it; scope.launch { list.scrollToItem(0) } } }
+            }
         }
     }
 }

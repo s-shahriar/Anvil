@@ -99,7 +99,9 @@ class ContentRepository(
             val key = "${c.getString("module")}/${c.getString("slug")}"
             names[key] = c.optString("name"); sort[key] = c.optInt("sort_order")
         }
-        val subs = db.selectAll("subtopics", "select=slug,name,sort_order,categories(slug)&order=id")
+        val subs = db.selectAll("subtopics", "select=slug,name,sort_order,categories(slug)&order=sort_order,id")
+        val wcats = db.selectAll("written_categories", "select=id,name,color,sort_order&topic=eq.data&order=sort_order")
+        val wcards = db.selectAll("written_cards", "select=category_id,serial,icon,title,subtitle,body,tip,issues,benefits,sort_order&topic=eq.data&order=sort_order")
         val rows = db.selectAll(
             "questions",
             "select=id,uid,type,question,options,correct_answer,correct_answer_text,explanation,extra,sort_order," +
@@ -110,7 +112,7 @@ class ContentRepository(
             r.remove("categories")
             Item(r.getString("id"), r.optString("uid").ifEmpty { null }, cat.getString("module"), cat.getString("slug"), r.optInt("sort_order"), r)
         }
-        return TopicCatalog.build(module, items, names, sort, subs, now)
+        return TopicCatalog.build(module, items, names, sort, subs, now, wcats, wcards)
     }
 
     private suspend fun downloadIct(now: Long): ModuleContent {
@@ -137,7 +139,8 @@ class ContentRepository(
             c.groups.forEach { g -> g.topics.forEachIndexed { i, t -> names.put(t.key, t.name); sort.put(t.key, i) } }
             w.write(
                 JSONObject().put("syncedAt", c.syncedAt).put("names", names).put("sort", sort)
-                    .put("subtopics", JSONArray(c.subtopics)).toString(),
+                    .put("subtopics", JSONArray(c.subtopics)).put("v", CACHE_VERSION)
+                    .put("wcats", JSONArray(c.writtenCategories)).put("wcards", JSONArray(c.writtenCards)).toString(),
             )
             w.newLine()
             for (it in c.allItems()) {
@@ -164,7 +167,8 @@ class ContentRepository(
                 val o = JSONObject(line)
                 items.add(Item(o.getString("id"), o.optString("uid").takeIf { !o.isNull("uid") && it.isNotEmpty() }, o.getString("g"), o.getString("t"), o.getInt("s"), o.getJSONObject("d")))
             }
-            return TopicCatalog.build(module, items, names, sort, subs, meta.getLong("syncedAt"))
+            fun list(key: String) = meta.optJSONArray(key)?.let { a -> List(a.length()) { a.getJSONObject(it) } }.orEmpty()
+            return TopicCatalog.build(module, items, names, sort, subs, meta.getLong("syncedAt"), list("wcats"), list("wcards"), meta.optInt("v", 1))
         }
     }
 }

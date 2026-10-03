@@ -3,6 +3,7 @@ package com.syed.anvil.ui.theme
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 
 /** Where in the app we are: each scope paints with its own colours. */
 enum class Scope { SHELL, GENERAL, ICT }
@@ -19,6 +20,9 @@ class Palette(
     val outline: Color,
     val ok: Color, val bad: Color, val warn: Color, val info: Color, val imp: Color,
 )
+
+/** True for the dark variants (their backgrounds are near-black). */
+val Palette.isDark: Boolean get() = bg.luminance() < .5f
 
 private fun c(hex: Long) = Color(0xFF000000 or hex)
 

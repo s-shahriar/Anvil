@@ -78,6 +78,7 @@ class ModuleNav(
     val onExam: (group: String) -> Unit,
     val onSaved: (kind: PoolSet, group: String) -> Unit,
     val onSearchHit: (Item) -> Unit,
+    val onWritten: () -> Unit,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -183,6 +184,18 @@ private fun ModuleBody(id: ModuleId, content: ModuleContent, flags: Map<String, 
                 if (!LongForm.isLongForm(group.key)) Action(Icons.Filled.Timer, "Exam", null, MaterialTheme.colorScheme.primary, Modifier.weight(1f)) { nav.onExam(group.key) }
                 Action(Icons.Filled.Star, "Nailed", counts.getValue(PoolSet.NAILED), p.ok, Modifier.weight(1f)) { nav.onSaved(PoolSet.NAILED, group.key) }
                 Action(Icons.Filled.Bookmark, "Important", counts.getValue(PoolSet.IMPORTANT), p.imp, Modifier.weight(1f)) { nav.onSaved(PoolSet.IMPORTANT, group.key) }
+            }
+        }
+        if (content.writtenCards.isNotEmpty()) item {
+            Row(
+                Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).background(p.primaryContainer).clickable(onClick = nav.onWritten).padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Written · Data", style = MaterialTheme.typography.titleMedium, color = p.onPrimaryContainer)
+                    Text("লিখিত পরীক্ষার তথ্য সংকলন", style = MaterialTheme.typography.bodySmall, color = p.onPrimaryContainer)
+                }
+                Text("${content.writtenCards.size}", style = MaterialTheme.typography.labelLarge, color = p.onPrimaryContainer)
             }
         }
         item {

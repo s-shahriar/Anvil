@@ -8,6 +8,8 @@ import org.json.JSONObject
  *  - general: id-less question fields (question, options, correct_answer, explanation, extra, ...)
  *  - ict: the `payload` jsonb (written/extra/viva cards carry their whole answer there)
  */
+const val CACHE_VERSION = 2
+
 class Item(
     val id: String,
     val uid: String?,
@@ -39,8 +41,16 @@ class ModuleContent(
     val syncedAt: Long,
     /** Raw sub-topic rows (general/LiveMCQ), kept so the cache is complete offline. */
     val subtopics: List<JSONObject>,
+    /** General's "Written » Data" reference cards and their categories. */
+    val writtenCategories: List<JSONObject> = emptyList(),
+    val writtenCards: List<JSONObject> = emptyList(),
+    /** Format of the offline copy; an older one is topped up with a fresh download. */
+    val version: Int = CACHE_VERSION,
 ) {
     val total: Int get() = groups.sumOf { it.count }
+
+    /** A topic's sub-topics, in the order the admin set (LiveMCQ only). */
+    fun subtopicsFor(topicSlug: String): List<Subtopic> = Subtopics.forTopic(subtopics, topicSlug)
     fun items(group: String, topic: String): List<Item> = byTopic["$group/$topic"].orEmpty()
     fun allItems(): Sequence<Item> = byTopic.values.asSequence().flatten()
 }
@@ -85,6 +95,9 @@ object TopicCatalog {
         topicSort: Map<String, Int>,
         subtopics: List<JSONObject>,
         syncedAt: Long,
+        writtenCategories: List<JSONObject> = emptyList(),
+        writtenCards: List<JSONObject> = emptyList(),
+        version: Int = CACHE_VERSION,
     ): ModuleContent {
         val byTopic = items.groupBy { "${it.group}/${it.topic}" }
             .mapValues { (_, v) -> v.sortedByDescending { it.sort } } // newest first, like the web apps
@@ -103,6 +116,6 @@ object TopicCatalog {
             )
             GroupInfo(g, groupTitle(g), topics)
         }
-        return ModuleContent(module, groups, byTopic, syncedAt, subtopics)
+        return ModuleContent(module, groups, byTopic, syncedAt, subtopics, writtenCategories, writtenCards, version)
     }
 }

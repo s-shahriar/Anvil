@@ -28,6 +28,7 @@ import com.syed.anvil.ui.screen.ReaderScreen
 import com.syed.anvil.ui.screen.SavedScreen
 import com.syed.anvil.ui.screen.SettingsScreen
 import com.syed.anvil.ui.screen.StudyScreen
+import com.syed.anvil.ui.screen.WrittenDataScreen
 import com.syed.anvil.ui.theme.AnvilTheme
 import com.syed.anvil.ui.theme.Scope
 
@@ -69,6 +70,7 @@ fun AnvilNav(vm: AnvilViewModel, dark: Boolean, activity: Activity) {
                         onTopic = { g, t -> nav.navigate(if (LongForm.isLongForm(g)) "read/${id.key}/$g/$t" else "topic/${id.key}/$g/$t") },
                         onExam = { g -> nav.navigate("exam/${id.key}?group=$g") },
                         onSaved = { kind, g -> nav.navigate("saved/${id.key}/${kind.key}/$g") },
+                        onWritten = { nav.navigate("written/${id.key}") },
                         onSearchHit = { item ->
                             val dest = if (LongForm.isLongForm(item)) "read" else "study"
                             nav.navigate("$dest/${id.key}/${item.group}/${item.topic}?focus=${Uri.encode(item.uid ?: "")}")
@@ -120,6 +122,9 @@ fun AnvilNav(vm: AnvilViewModel, dark: Boolean, activity: Activity) {
                     },
                 )
             }
+        }
+        composable("written/{m}") { e ->
+            Themed(e.module().scope()) { WrittenDataScreen(vm, onBack = { nav.popBackStack() }) }
         }
         composable("exam/{m}?group={group}", listOf(navArgument("group") { type = NavType.StringType; nullable = true; defaultValue = null })) { e ->
             val id = e.module()

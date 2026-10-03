@@ -15,6 +15,7 @@ import androidx.lifecycle.viewModelScope
 import com.syed.anvil.AnvilApp
 import com.syed.anvil.backend.GoogleSignIn
 import com.syed.anvil.backend.ModuleId
+import com.syed.anvil.content.CACHE_VERSION
 import com.syed.anvil.content.ContentState
 import com.syed.anvil.update.DownloadProgress
 import com.syed.anvil.update.UpdateInfo
@@ -72,7 +73,9 @@ class AnvilViewModel(private val app: Application) : AndroidViewModel(app) {
         val m = anvil.module(id)
         m.content.load()
         val stale = System.currentTimeMillis() - m.content.cachedAt > DAY_MS
-        if (online.value && (m.content.state.value is ContentState.Empty || stale)) {
+        // A copy saved by an older version of the app lacks newer data (e.g. the written cards): fetch it once.
+        val outdated = id == ModuleId.GENERAL && ((m.content.state.value as? ContentState.Ready)?.content?.version ?: CACHE_VERSION) < CACHE_VERSION
+        if (online.value && (m.content.state.value is ContentState.Empty || stale || outdated)) {
             m.content.refresh()
         }
         // A download that was cut short (app closed, connection lost) is topped up here.
