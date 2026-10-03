@@ -38,6 +38,9 @@ class AnvilApp : Application() {
     lateinit var images: ImageStore; private set
     private val modules = HashMap<ModuleId, ModuleServices>()
 
+    /** ICT » Practice: bundled with the app, loaded on first use. */
+    val practice: List<com.syed.anvil.practice.Category> by lazy { com.syed.anvil.practice.PracticeData.load { assets.open(it) } }
+
     override fun onCreate() {
         super.onCreate()
         connectivity = Connectivity(this)

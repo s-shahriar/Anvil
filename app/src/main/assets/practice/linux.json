@@ -1,0 +1,458 @@
+{
+  "category": "linux",
+  "name": "Linux",
+  "topics": [
+    {
+      "id": "filesystem",
+      "name": "File System Structure",
+      "info": {
+        "summary": [
+          "Linux-এ সব কিছু একটা single tree-এর নিচে, যার শুরু root (/) থেকে।",
+          "প্রতিটি গুরুত্বপূর্ণ directory-র নির্দিষ্ট কাজ আছে — config, log, user file আলাদা জায়গায় থাকে।",
+          "Pipe (|) দিয়ে এক command-এর output আরেক command-এ পাঠিয়ে শক্তিশালী কাজ করা যায়।"
+        ],
+        "table": {
+          "headers": ["Directory", "কী থাকে"],
+          "rows": [
+            ["/", "root — সব কিছুর শুরু"],
+            ["/etc", "system ও service-এর configuration file"],
+            ["/var", "পরিবর্তনশীল data — log (/var/log), mail, spool"],
+            ["/home", "সাধারণ user-দের personal file"],
+            ["/root", "root user-এর home directory"],
+            ["/bin, /usr/bin", "executable command (programs)"],
+            ["/tmp", "temporary file (reboot-এ মুছে যায়)"],
+            ["/boot", "kernel ও boot loader file"],
+            ["/dev", "device file (disk, terminal...)"],
+            ["/proc", "process ও kernel-এর live info (virtual)"]
+          ]
+        }
+      },
+      "commands": [
+        { "cmd": "pwd", "desc": "বর্তমানে কোন directory-তে আছ তা দেখায়" },
+        { "cmd": "cd /etc", "desc": "/etc directory-তে যাওয়া" },
+        { "cmd": "cd ~", "desc": "নিজের home directory-তে ফেরা" },
+        { "cmd": "ls -l", "desc": "directory-র বিস্তারিত list" },
+        { "cmd": "cat /etc/os-release", "desc": "একটি config file-এর ভেতর দেখা" },
+        { "cmd": "ls -l | grep \"^d\"", "desc": "শুধু directory গুলো দেখা (pipe)" },
+        { "cmd": "ls /etc | wc -l", "desc": "একটি directory-তে কতগুলো file/entry আছে গণনা (pipe)" },
+        { "cmd": "find /etc -type f -name \"*.conf\" | wc -l", "desc": ".conf file গণনা (-type f + pipe)" },
+        { "cmd": "find . -type f -name \"*.pdf\" | wc -l", "desc": "current + sub directory-তে কতগুলো .pdf file আছে গণনা (-type f)" },
+        { "cmd": "find . -type d -name \"Android\" | wc -l", "desc": "Android নামের কতগুলো directory আছে গণনা (-type d)" },
+        { "cmd": "find / -type f -name \"myFile.txt\"", "desc": "পুরো system-এ (root / থেকে) ঐ নামের file খোঁজা (-type f)" }
+      ],
+      "practice": [
+        { "prompt": "/etc directory-তে navigate করো", "accept": ["cd /etc", "cd /etc/"], "explain": "cd = change directory" },
+        { "prompt": "বর্তমানে কোন directory-তে আছ তা দেখাও", "accept": ["pwd"], "explain": "pwd = print working directory" },
+        { "prompt": "/var/log directory-র ভেতরের file গুলো বিস্তারিত list করো", "accept": ["ls -l /var/log", "ls -la /var/log", "ls -al /var/log"], "explain": "ls -l = long listing" },
+        { "prompt": "নিজের home directory-তে ফিরে যাও", "accept": ["cd ~", "cd", "cd $HOME"], "explain": "cd একা বা cd ~ → home-এ নিয়ে যায়" },
+        { "prompt": "/etc/os-release file-টির ভেতরের লেখা দেখাও", "accept": ["cat /etc/os-release"], "explain": "cat = file-এর content প্রিন্ট করে" },
+        { "prompt": "ls আর grep pipe করে current directory-র শুধু directory গুলো দেখাও (যে লাইন d দিয়ে শুরু)", "accept": ["ls -l | grep \"^d\"", "ls -l | grep '^d'", "ls -la | grep \"^d\"", "ls -la | grep '^d'"], "explain": "pipe (|) এক command-এর output পরের command-এ পাঠায়" },
+        { "prompt": "/etc-এর ভেতর কতগুলো .conf file আছে গুনে দেখাও (find + wc)", "accept": ["find /etc -type f -name \"*.conf\" | wc -l", "find /etc -type f -name '*.conf' | wc -l", "find /etc -name \"*.conf\" -type f | wc -l", "find /etc -name \"*.conf\" | wc -l", "find /etc -name '*.conf' | wc -l"], "answers": ["find /etc -type f -name \"*.conf\" | wc -l", "find /etc -name \"*.conf\" | wc -l"], "explain": "কোথায়? /etc  |  কী ধরনের? -type f (শুধু file)  |  কী নাম? -name \"*.conf\"  →  তারপর | wc -l = গণনা। প্রশ্নে file চাওয়া বলে -type f নিখুঁত।" },
+        { "prompt": "/etc directory-তে কতগুলো file/entry আছে গুনে দেখাও (ls + wc)", "accept": ["ls /etc | wc -l", "ls -1 /etc | wc -l"], "explain": "ls-এর output প্রতি লাইনে একটি নাম; wc -l লাইন গণনা করে = entry সংখ্যা" },
+        { "prompt": "current ও তার sub directory মিলিয়ে কতগুলো .pdf file আছে গুনে দেখাও (find -type f + wc)", "accept": ["find . -type f -name \"*.pdf\" | wc -l", "find . -type f -name '*.pdf' | wc -l", "find . -name \"*.pdf\" -type f | wc -l", "find . -name \"*.pdf\" | wc -l", "find . -name '*.pdf' | wc -l"], "answers": ["find . -type f -name \"*.pdf\" | wc -l", "find . -name \"*.pdf\" | wc -l"], "explain": "কোথায়? . (current+sub)  |  কী ধরনের? -type f (শুধু file)  |  কী নাম? -name \"*.pdf\"  →  তারপর | wc -l = গণনা। -type f না দিলে .pdf নামের directory-ও গুনত, বাস্তবে নেই বলে count একই।" },
+        { "prompt": "current directory থেকে Android নামের কতগুলো directory আছে গুনে দেখাও (find -type d + wc)", "accept": ["find . -type d -name \"Android\" | wc -l", "find . -type d -name 'Android' | wc -l", "find . -name \"Android\" -type d | wc -l"], "explain": "কোথায়? . (current+sub)  |  কী ধরনের? -type d (শুধু directory)  |  কী নাম? -name \"Android\"  →  তারপর | wc -l = গণনা" },
+        { "prompt": "পুরো system-এ (root / থেকে) myFile.txt নামের file খুঁজে বের করো", "accept": ["find / -name \"myFile.txt\"", "find / -name 'myFile.txt'", "find / -name myFile.txt", "sudo find / -name \"myFile.txt\"", "sudo find / -name 'myFile.txt'", "sudo find / -name myFile.txt", "find / -type f -name \"myFile.txt\"", "find / -type f -name 'myFile.txt'", "find / -type f -name myFile.txt", "sudo find / -type f -name \"myFile.txt\"", "sudo find / -type f -name myFile.txt"], "answers": ["find / -type f -name \"myFile.txt\"", "find / -name \"myFile.txt\""], "explain": "কোথায়? / (পুরো system)  |  কী ধরনের? -type f (শুধু file)  |  কী নাম? -name \"myFile.txt\"। -type f না দিলে file+directory দুটোই মেলে; নামে space না থাকলে quote ঐচ্ছিক।" }
+      ]
+    },
+    {
+      "id": "fileops",
+      "name": "File Operations & Search",
+      "info": {
+        "summary": [
+          "File/directory তৈরি, copy, move/rename ও delete করার সাধারণ commands।",
+          "find = নাম/type/size দিয়ে file খোঁজা; grep = file-এর ভেতরে text খোঁজা।",
+          "tar দিয়ে archive (compress/extract), আর pipe (|) দিয়ে command জুড়ে শক্তিশালী কাজ।"
+        ],
+        "table": {
+          "headers": ["Option", "মানে"],
+          "rows": [
+            ["find -name", "নাম দিয়ে খোঁজা"],
+            ["find -type f / d", "শুধু file / directory"],
+            ["find -size +100M", "size দিয়ে খোঁজা"],
+            ["grep -r", "recursive (সব subfolder)"],
+            ["grep -i", "case-insensitive"],
+            ["grep -n", "line number সহ"]
+          ]
+        }
+      },
+      "commands": [
+        { "cmd": "cp file.txt /backup/", "desc": "file copy করা" },
+        { "cmd": "cp -r dir1 dir2", "desc": "directory copy (recursive)" },
+        { "cmd": "mv old.txt new.txt", "desc": "rename বা move" },
+        { "cmd": "rm file.txt", "desc": "file মুছে ফেলা" },
+        { "cmd": "rm -r dir/", "desc": "directory ও ভেতরের সব মুছে ফেলা" },
+        { "cmd": "mkdir -p a/b/c", "desc": "nested directory একসাথে তৈরি" },
+        { "cmd": "touch file.txt", "desc": "খালি file তৈরি" },
+        { "cmd": "find . -type f -name \"*.log\"", "desc": ".log file খোঁজা (-type f)" },
+        { "cmd": "find / -type f -size +100M", "desc": "100MB-এর বড় file খোঁজা (-type f)" },
+        { "cmd": "find /var/log -type f -name \"*.log\" -delete", "desc": "খুঁজে পাওয়া সব .log file মুছে ফেলা (-delete)" },
+        { "cmd": "tar -czf backup.tar.gz /data", "desc": "directory compress (archive)" },
+        { "cmd": "tar -xzf backup.tar.gz", "desc": "archive extract" }
+      ],
+      "practice": [
+        { "prompt": "report.txt file-টি /backup/ directory-তে copy করো", "accept": ["cp report.txt /backup/", "cp report.txt /backup"], "explain": "cp <source> <destination>" },
+        { "prompt": "old.txt file-টির নাম বদলে new.txt করো", "accept": ["mv old.txt new.txt"], "explain": "mv = move/rename" },
+        { "prompt": "temp/ directory ও তার ভেতরের সব কিছু মুছে ফেলো", "accept": ["rm -r temp/", "rm -r temp", "rm -rf temp/", "rm -rf temp"], "explain": "-r = recursive (directory-র জন্য)" },
+        { "prompt": "a/b/c এই nested directory গুলো একসাথে তৈরি করো", "accept": ["mkdir -p a/b/c"], "explain": "-p = parent directory গুলোও বানিয়ে নেয়" },
+        { "prompt": "current directory ও সব subfolder-এ .log দিয়ে শেষ হওয়া file খুঁজে বের করো", "accept": ["find . -type f -name \"*.log\"", "find . -type f -name '*.log'", "find . -name \"*.log\" -type f", "find . -name '*.log' -type f", "find . -name \"*.log\"", "find . -name '*.log'"], "answers": ["find . -type f -name \"*.log\"", "find . -name \"*.log\""], "explain": "কোথায়? . (current+sub)  |  কী ধরনের? -type f (শুধু file)  |  কী নাম? -name \"*.log\"। প্রশ্নে file চাওয়া বলে -type f নিখুঁত; -type f না দিলে .log নামের directory-ও মিলত। মনে রাখো: -type f (একসাথে, dash সহ), 'type -f' নয়।" },
+        { "prompt": "/var/log-এর সব .log file খুঁজে মুছে ফেলো (find -delete)", "accept": ["find /var/log -type f -name \"*.log\" -delete", "find /var/log -type f -name '*.log' -delete", "find /var/log -name \"*.log\" -delete", "find /var/log -name '*.log' -delete"], "explain": "কোথায়? /var/log  |  কী ধরনের? -type f (শুধু file)  |  কী নাম? -name \"*.log\"  |  কী করবে? -delete = প্রতিটি মুছে ফেলে" },
+        { "prompt": "app.log file-এর ভেতরে 'error' শব্দটি খুঁজে বের করো", "accept": ["grep error app.log", "grep 'error' app.log", "grep \"error\" app.log"], "explain": "grep <word> <file>" },
+        { "prompt": "app.log-এ case-insensitive ভাবে 'error' খোঁজো (Error/ERROR-ও মিলবে)", "accept": ["grep -i error app.log", "grep -i 'error' app.log", "grep -i \"error\" app.log"], "explain": "-i = case-insensitive" },
+        { "prompt": "app.log-এ আস্ত শব্দ হিসেবে 'error' খোঁজো (\"errors\"/\"myerror\" বাদ)", "accept": ["grep -w error app.log", "grep -w 'error' app.log", "grep -w \"error\" app.log"], "explain": "-w = whole word match (শব্দের সীমানা মেলায়)" },
+        { "prompt": "/var/log-এর সব file-এ recursive ও case-insensitive ভাবে 'error' খোঁজো", "accept": ["grep -ri error /var/log", "grep -ri 'error' /var/log", "grep -ir error /var/log", "grep -ir 'error' /var/log"], "explain": "-r = recursive, -i = case-insensitive" },
+        { "prompt": "app.log-এ 'error' শব্দ কতবার আছে গুনে দেখাও (grep + wc pipe)", "accept": ["grep error app.log | wc -l", "grep 'error' app.log | wc -l"], "explain": "grep output পাইপ করে wc -l দিয়ে গণনা" },
+        { "prompt": "/data directory-কে backup.tar.gz নামে compress করো", "accept": ["tar -czf backup.tar.gz /data"], "explain": "-c create, -z gzip, -f filename" }
+      ]
+    },
+    {
+      "id": "sort",
+      "name": "Sorting (sort)",
+      "info": {
+        "summary": [
+          "sort input-এর লাইনগুলো সাজিয়ে output-এ দেখায়। মূল file বদলায় না।",
+          "Default-এ প্রতিটি লাইনকে text ধরে বাঁ দিক থেকে অক্ষর ধরে ধরে তুলনা করে। তাই 10 আগে আসে 9-এর আগে, কারণ প্রথম অক্ষর '1' ছোট '9'-এর চেয়ে।",
+          "সংখ্যা হিসেবে তুলনা করতে -n লাগে। 512K, 20M, 1G-এর মতো size-এর জন্য -h লাগে, কারণ -n শুধু সামনের সংখ্যাটা দেখে (1G-কে 1 ধরে)।",
+          "বাস্তবে sort সাধারণত pipe-এর মাঝখানে বসে: command | sort | head মানে \"top N\"।"
+        ],
+        "table": {
+          "headers": ["Option", "মানে"],
+          "rows": [
+            ["sort (option ছাড়া)", "text order (A থেকে Z, অক্ষর ধরে)"],
+            ["-r", "reverse — উল্টো ক্রম (বড় আগে)"],
+            ["-n", "numeric — সংখ্যা হিসেবে (2 < 9 < 10)"],
+            ["-h", "human-readable size (512K < 20M < 1G)"]
+          ]
+        }
+      },
+      "commands": [
+        { "cmd": "ps aux --sort=-%mem | head", "desc": "সবচেয়ে বেশি memory নেওয়া process (ps-এর নিজস্ব --sort)" }
+      ],
+      "practice": [
+        { "prompt": "names.txt file-এর লাইনগুলো A থেকে Z সাজিয়ে দেখাও", "accept": ["sort names.txt"], "explain": "option ছাড়া sort = text order, অক্ষর ধরে তুলনা" },
+        { "prompt": "names.txt-এর লাইনগুলো উল্টো ক্রমে (Z থেকে A) সাজাও", "accept": ["sort -r names.txt"], "explain": "-r = reverse" },
+        { "prompt": "marks.txt-এ প্রতি লাইনে একটি সংখ্যা আছে। সংখ্যা হিসেবে ছোট থেকে বড় সাজাও", "accept": ["sort -n marks.txt"], "explain": "-n = numeric। -n ছাড়া 10, 100, 2, 9 আসত, কারণ text হিসেবে '1' ছোট '2'-এর চেয়ে। -n দিলে 2, 9, 10, 100।" },
+        { "prompt": "marks.txt-এর সংখ্যাগুলো বড় থেকে ছোট সাজাও", "accept": ["sort -nr marks.txt", "sort -rn marks.txt", "sort -n -r marks.txt", "sort -r -n marks.txt"], "explain": "-n = সংখ্যা হিসেবে, -r = উল্টো, তাই বড় আগে। দুটো flag একসাথে -nr লেখা যায়।" },
+        { "prompt": "ips.txt-এ প্রতি লাইনে একটি IP আছে। কোন IP কতবার এসেছে গুনে, বেশি থেকে কম সাজাও", "accept": ["sort ips.txt | uniq -c | sort -nr", "sort ips.txt | uniq -c | sort -rn", "sort ips.txt | uniq -c | sort -n -r"], "explain": "sort = একই IP পাশাপাশি আনে  |  uniq -c = পাশাপাশি duplicate গুনে সামনে count বসায়  |  sort -nr = count অনুযায়ী বড় আগে। প্রথম sort না দিলে uniq ছড়ানো duplicate আলাদা ভাবে গুনত।" }
+      ]
+    },
+    {
+      "id": "users",
+      "name": "User & Group Management",
+      "info": {
+        "summary": [
+          "প্রতিটি user-এর একটি নাম, UID ও একটি বা একাধিক group থাকে।",
+          "User তথ্য থাকে /etc/passwd-এ, password (hash) থাকে /etc/shadow-এ, group থাকে /etc/group-এ।",
+          "useradd দিয়ে তৈরি, usermod দিয়ে পরিবর্তন, userdel দিয়ে মুছে ফেলা।"
+        ]
+      },
+      "commands": [
+        { "cmd": "useradd john", "desc": "john নামে নতুন user তৈরি" },
+        { "cmd": "passwd john", "desc": "john-এর password সেট করা" },
+        { "cmd": "usermod -aG sudo john", "desc": "john-কে sudo group-এ যোগ করা" },
+        { "cmd": "userdel john", "desc": "john user মুছে ফেলা" },
+        { "cmd": "groupadd dev", "desc": "dev নামে নতুন group" },
+        { "cmd": "id john", "desc": "john-এর UID, GID ও group" },
+        { "cmd": "whoami", "desc": "তুমি বর্তমানে কোন user" },
+        { "cmd": "grep john /etc/passwd", "desc": "নির্দিষ্ট user খোঁজা (pipe/grep)" },
+        { "cmd": "cut -d: -f1 /etc/passwd", "desc": "সব username list করা" }
+      ],
+      "practice": [
+        { "prompt": "john নামে একটি নতুন user তৈরি করো", "accept": ["useradd john", "sudo useradd john"], "explain": "useradd <username>" },
+        { "prompt": "john user-কে sudo group-এ যোগ করো (আগের group বজায় রেখে)", "accept": ["usermod -aG sudo john", "sudo usermod -aG sudo john"], "explain": "-aG = append to Group (পুরোনো group না মুছে)" },
+        { "prompt": "dev নামে একটি নতুন group তৈরি করো", "accept": ["groupadd dev", "sudo groupadd dev"], "explain": "groupadd <groupname>" },
+        { "prompt": "john user-টি মুছে ফেলো", "accept": ["userdel john", "sudo userdel john"], "explain": "userdel <username>" },
+        { "prompt": "john user-এর UID ও group দেখাও", "accept": ["id john"], "explain": "id <username>" },
+        { "prompt": "তুমি বর্তমানে কোন user তা দেখাও", "accept": ["whoami"], "explain": "whoami = current user" },
+        { "prompt": "/etc/passwd file থেকে john যুক্ত লাইন খুঁজে বের করো", "accept": ["grep john /etc/passwd", "grep 'john' /etc/passwd", "cat /etc/passwd | grep john"], "explain": "grep দিয়ে file-এর ভেতরে খোঁজা" },
+        { "prompt": "/etc/passwd থেকে শুধু username গুলো (প্রথম column, : দিয়ে আলাদা) বের করো", "accept": ["cut -d: -f1 /etc/passwd"], "explain": "cut -d (delimiter) -f (field)" }
+      ]
+    },
+    {
+      "id": "permissions",
+      "name": "File Permission",
+      "info": {
+        "summary": [
+          "প্রতিটি file/directory-র permission তিন ভাগে: owner, group, others — প্রতিটিতে r (read), w (write), x (execute)।",
+          "Octal: r=4, w=2, x=1। যেমন 755 = rwx r-x r-x; 644 = rw- r-- r--।",
+          "chmod = permission বদলায়, chown = owner বদলায়, umask = নতুন file-এর default permission ঠিক করে।"
+        ],
+        "table": {
+          "headers": ["Octal", "মানে", "সাধারণ ব্যবহার"],
+          "rows": [
+            ["755", "rwx r-x r-x", "script, directory"],
+            ["644", "rw- r-- r--", "সাধারণ file"],
+            ["600", "rw- --- ---", "private file (যেমন SSH key)"],
+            ["777", "rwx rwx rwx", "সবার সব access (ঝুঁকিপূর্ণ)"]
+          ]
+        }
+      },
+      "commands": [
+        { "cmd": "ls -l", "desc": "file-এর permission দেখা" },
+        { "cmd": "chmod 755 file.sh", "desc": "octal দিয়ে permission সেট" },
+        { "cmd": "chmod +x script.sh", "desc": "execute permission যোগ" },
+        { "cmd": "chmod -R 755 /var/www", "desc": "recursive permission (directory ও ভেতরের সব)" },
+        { "cmd": "chown john file.txt", "desc": "owner বদলানো" },
+        { "cmd": "chown john:dev file.txt", "desc": "owner ও group বদলানো" },
+        { "cmd": "umask", "desc": "default permission mask দেখা" },
+        { "cmd": "find /home -type f -perm 777", "desc": "777 permission-যুক্ত file খোঁজা" }
+      ],
+      "practice": [
+        { "prompt": "file.sh-এ permission দাও: owner=rwx, group=r-x, others=r-x (octal)", "accept": ["chmod 755 file.sh"], "explain": "rwx=7, r-x=5 → 755" },
+        { "prompt": "script.sh file-এ execute permission যোগ করো", "accept": ["chmod +x script.sh"], "explain": "+x = execute যোগ" },
+        { "prompt": "file.txt-এর owner john বানাও", "accept": ["chown john file.txt", "sudo chown john file.txt"], "explain": "chown <owner> <file>" },
+        { "prompt": "file.txt-এর owner john ও group dev বানাও", "accept": ["chown john:dev file.txt", "sudo chown john:dev file.txt"], "explain": "chown owner:group file" },
+        { "prompt": "data.txt-এ owner, group ও others সবাইকে read+write দাও (octal)", "accept": ["chmod 666 data.txt"], "explain": "rw-=6 → 666" },
+        { "prompt": "বর্তমান umask মান দেখাও", "accept": ["umask"], "explain": "umask = default permission mask" },
+        { "prompt": "/var/www ও তার ভেতরের সব কিছুতে recursive ভাবে 755 permission দাও", "accept": ["chmod -R 755 /var/www", "sudo chmod -R 755 /var/www"], "explain": "-R = recursive" },
+        { "prompt": "/home-এর ভেতরে 777 permission-যুক্ত file গুলো খুঁজে বের করো", "accept": ["find /home -type f -perm 777", "find /home -perm 777 -type f"], "explain": "কোথায়? /home  |  কী ধরনের? -type f (শুধু file)  |  কী permission? -perm 777" }
+      ]
+    },
+    {
+      "id": "process",
+      "name": "Process & Service",
+      "info": {
+        "summary": [
+          "চলমান প্রতিটি program একটি process, যার একটি PID (Process ID) থাকে।",
+          "ps ও top দিয়ে process দেখা যায়, kill দিয়ে বন্ধ করা যায়।",
+          "Service (background daemon) systemctl দিয়ে নিয়ন্ত্রণ করা হয় (start/stop/status/enable)।"
+        ]
+      },
+      "commands": [
+        { "cmd": "ps aux", "desc": "চলমান সব process বিস্তারিত" },
+        { "cmd": "top", "desc": "live process ও resource monitor" },
+        { "cmd": "ps aux | grep nginx", "desc": "নির্দিষ্ট process খোঁজা (pipe)" },
+        { "cmd": "ps aux --sort=-%cpu | head", "desc": "সবচেয়ে বেশি CPU-ব্যবহারকারী process" },
+        { "cmd": "kill 1234", "desc": "PID দিয়ে process বন্ধ" },
+        { "cmd": "pkill nginx", "desc": "নাম দিয়ে process বন্ধ" },
+        { "cmd": "systemctl status nginx", "desc": "nginx service-এর status" },
+        { "cmd": "systemctl restart nginx", "desc": "nginx service restart" },
+        { "cmd": "systemctl enable nginx", "desc": "boot-এ auto চালু" }
+      ],
+      "practice": [
+        { "prompt": "চলমান সব process বিস্তারিতভাবে দেখাও", "accept": ["ps aux", "ps -aux", "ps -ef"], "explain": "ps aux = সব user-এর সব process" },
+        { "prompt": "live process ও resource monitor চালু করো", "accept": ["top"], "explain": "top = realtime monitor" },
+        { "prompt": "চলমান process থেকে nginx যুক্ত গুলো খুঁজে বের করো (ps + grep pipe)", "accept": ["ps aux | grep nginx", "ps -ef | grep nginx"], "explain": "ps output পাইপ করে grep দিয়ে filter" },
+        { "prompt": "PID 1234 process-টি বন্ধ করো", "accept": ["kill 1234"], "explain": "kill <PID>" },
+        { "prompt": "নাম দিয়ে nginx-এর সব process বন্ধ করো", "accept": ["pkill nginx", "sudo pkill nginx", "killall nginx", "sudo killall nginx"], "explain": "pkill/killall = নাম দিয়ে বন্ধ" },
+        { "prompt": "সবচেয়ে বেশি CPU ব্যবহার করা process গুলো উপরে দেখাও (ps sort + head)", "accept": ["ps aux --sort=-%cpu | head"], "explain": "--sort=-%cpu = CPU অনুযায়ী descending" },
+        { "prompt": "nginx service-এর status দেখাও", "accept": ["systemctl status nginx", "sudo systemctl status nginx"], "explain": "systemctl status <service>" },
+        { "prompt": "nginx service restart করো", "accept": ["systemctl restart nginx", "sudo systemctl restart nginx"], "explain": "systemctl restart <service>" },
+        { "prompt": "nginx service-কে boot-এ auto চালু করার জন্য enable করো", "accept": ["systemctl enable nginx", "sudo systemctl enable nginx"], "explain": "enable = boot-এ চালু হবে" }
+      ]
+    },
+    {
+      "id": "disk",
+      "name": "Disk & Partition",
+      "info": {
+        "summary": [
+          "df = পুরো filesystem-এ কত জায়গা খালি/ব্যবহৃত তা দেখায়।",
+          "du = নির্দিষ্ট file/directory কত জায়গা নিয়েছে তা দেখায়।",
+          "lsblk = disk ও তার partition গুলো tree আকারে দেখায়।"
+        ]
+      },
+      "commands": [
+        { "cmd": "df -h", "desc": "disk free (human-readable)" },
+        { "cmd": "du -sh /var", "desc": "/var-এর মোট size" },
+        { "cmd": "du -sh * | sort -h", "desc": "প্রতিটি item-এর size, sort করা (pipe)" },
+        { "cmd": "lsblk", "desc": "block device ও partition tree" },
+        { "cmd": "df -h | grep /dev", "desc": "শুধু real disk filesystem (pipe)" },
+        { "cmd": "mount", "desc": "mounted filesystem list" }
+      ],
+      "practice": [
+        { "prompt": "disk-এ কত জায়গা খালি আছে human-readable ভাবে দেখাও", "accept": ["df -h"], "explain": "-h = human readable (GB/MB)" },
+        { "prompt": "/var directory কত জায়গা নিয়েছে তার summary দেখাও", "accept": ["du -sh /var", "sudo du -sh /var"], "explain": "-s = summary, -h = human readable" },
+        { "prompt": "system-এর block device ও partition গুলো tree আকারে দেখাও", "accept": ["lsblk"], "explain": "lsblk = list block devices" },
+        { "prompt": "বর্তমানে mounted filesystem গুলো দেখাও", "accept": ["mount"], "explain": "mount (argument ছাড়া) = mounted list" },
+        { "prompt": "current directory-র প্রতিটি item-এর size দেখিয়ে ছোট থেকে বড় sort করো (du + sort pipe)", "accept": ["du -sh * | sort -h"], "explain": "sort -h = human-readable size অনুযায়ী sort" },
+        { "prompt": "df output থেকে শুধু /dev দিয়ে শুরু হওয়া filesystem গুলো দেখাও", "accept": ["df -h | grep /dev", "df -h | grep dev", "df | grep /dev"], "explain": "df output পাইপ করে grep দিয়ে filter" },
+        { "prompt": "/home/user-এর ভেতরের সব file ও folder থেকে সবচেয়ে বড় 5টা দেখাও (du + sort + head)", "accept": ["du -ah /home/user | sort -rh | head -5", "du -ah /home/user | sort -hr | head -5", "du -ah /home/user | sort -rh | head -n 5", "du -ah /home/user | sort -hr | head -n 5", "du -ha /home/user | sort -rh | head -5", "du -ha /home/user | sort -hr | head -5"], "explain": "du -ah = প্রতিটি file ও folder-এর size (-a = all, শুধু folder না)  |  sort -rh = size অনুযায়ী, বড় আগে  |  head -5 = প্রথম 5 লাইন। -h ছাড়া শুধু -n দিলে 1G-কে 1 ধরে 512K-এর নিচে ফেলত।" },
+        { "prompt": "current directory-র সবচেয়ে বড় 10টা file/folder দেখাও (du + sort + head)", "accept": ["du -sh * | sort -rh | head -10", "du -sh * | sort -hr | head -10", "du -sh * | sort -rh | head -n 10", "du -sh * | sort -hr | head -n 10", "du -hs * | sort -rh | head -10", "du -hs * | sort -hr | head -10"], "explain": "du -sh * = current directory-র প্রতিটি item-এর মোট size (-s = ভেতরে না ঢুকে summary)  |  sort -rh = বড় আগে  |  head -10 = top 10" }
+      ]
+    },
+    {
+      "id": "network",
+      "name": "Networking",
+      "info": {
+        "summary": [
+          "Server-এর IP, connectivity ও open port দেখার সাধারণ commands।",
+          "ip a = IP address; ping = connectivity test; ss/netstat = open port ও connection।",
+          "curl/wget = HTTP request/download; dig = DNS lookup।"
+        ]
+      },
+      "commands": [
+        { "cmd": "ip a", "desc": "IP address ও network interface" },
+        { "cmd": "hostname -I", "desc": "server-এর IP দ্রুত দেখা" },
+        { "cmd": "ping google.com", "desc": "connectivity test" },
+        { "cmd": "ss -tuln", "desc": "open (listening) port সমূহ" },
+        { "cmd": "ss -tuln | grep 80", "desc": "নির্দিষ্ট port খোঁজা (pipe)" },
+        { "cmd": "netstat -tulnp", "desc": "port + কোন process (পুরোনো)" },
+        { "cmd": "curl -I https://example.com", "desc": "HTTP response header দেখা" },
+        { "cmd": "wget https://example.com/file", "desc": "file download" },
+        { "cmd": "dig example.com", "desc": "DNS record lookup" },
+        { "cmd": "sudo ufw status", "desc": "firewall-এর অবস্থা ও rule দেখা" },
+        { "cmd": "sudo ufw allow 22", "desc": "port 22 (SSH) খুলে দেওয়া" },
+        { "cmd": "sudo ufw enable", "desc": "firewall চালু করা" }
+      ],
+      "practice": [
+        { "prompt": "server-এর IP address ও network interface দেখাও", "accept": ["ip a", "ip addr", "ip address", "ip a s"], "explain": "ip a = address ও interface" },
+        { "prompt": "google.com-এ connectivity আছে কিনা ping দিয়ে পরীক্ষা করো", "accept": ["ping google.com", "ping -c 4 google.com"], "explain": "ping = reachability test" },
+        { "prompt": "কোন কোন port listen করছে তা দেখাও (ss দিয়ে)", "accept": ["ss -tuln", "ss -tlnu", "ss -lntu", "ss -ntlu"], "explain": "-t TCP, -u UDP, -l listening, -n numeric" },
+        { "prompt": "ss output থেকে port 80 যুক্ত লাইন খুঁজে বের করো (ss + grep pipe)", "accept": ["ss -tuln | grep 80", "ss -tuln | grep :80"], "explain": "ss output পাইপ করে grep দিয়ে filter" },
+        { "prompt": "example.com-এর শুধু HTTP response header curl দিয়ে দেখাও", "accept": ["curl -I https://example.com", "curl -I example.com", "curl -I http://example.com"], "explain": "-I = শুধু header (HEAD request)" },
+        { "prompt": "example.com-এর DNS record dig দিয়ে দেখাও", "accept": ["dig example.com"], "explain": "dig = DNS lookup tool" },
+        { "prompt": "firewall (ufw)-এর বর্তমান অবস্থা ও rule দেখাও", "accept": ["sudo ufw status", "ufw status"], "explain": "ufw = Uncomplicated Firewall" },
+        { "prompt": "ufw দিয়ে port 22 (SSH) allow করো", "accept": ["sudo ufw allow 22", "ufw allow 22", "sudo ufw allow ssh"], "explain": "ufw allow <port>" }
+      ]
+    },
+    {
+      "id": "ssh",
+      "name": "SSH",
+      "info": {
+        "summary": [
+          "SSH = একটি remote server-এ নিরাপদে (encrypted) login করার উপায়।",
+          "দুই ধরন: (১) Password-based — প্রতিবার password দিতে হয়। (২) Key-based — একটি key pair (public + private) ব্যবহার হয়।",
+          "Key-based: তোমার private key গোপনে নিজের কাছে থাকে; public key server-এর ~/.ssh/authorized_keys-এ রাখা হয় → password ছাড়াই নিরাপদ login।"
+        ]
+      },
+      "commands": [
+        { "cmd": "ssh john@192.168.1.10", "desc": "remote server-এ login" },
+        { "cmd": "ssh-keygen", "desc": "নতুন SSH key pair তৈরি" },
+        { "cmd": "ssh-copy-id john@192.168.1.10", "desc": "public key server-এ পাঠানো" },
+        { "cmd": "ssh -p 2222 john@host", "desc": "custom port দিয়ে login" },
+        { "cmd": "ssh john@host \"df -h\"", "desc": "remote-এ সরাসরি command চালানো" },
+        { "cmd": "scp file.txt john@host:/tmp/", "desc": "file copy remote server-এ (SSH-এর উপর)" }
+      ],
+      "practice": [
+        { "prompt": "192.168.1.10 server-এ john user হিসেবে SSH দিয়ে login করো", "accept": ["ssh john@192.168.1.10"], "explain": "ssh user@host" },
+        { "prompt": "একটি নতুন SSH key pair তৈরি করো", "accept": ["ssh-keygen", "ssh-keygen -t rsa", "ssh-keygen -t ed25519"], "explain": "ssh-keygen = key pair বানায়" },
+        { "prompt": "তোমার public key john@192.168.1.10 server-এ copy করো", "accept": ["ssh-copy-id john@192.168.1.10"], "explain": "ssh-copy-id user@host" },
+        { "prompt": "port 2222 ব্যবহার করে john@192.168.1.10-এ SSH করো", "accept": ["ssh -p 2222 john@192.168.1.10"], "explain": "-p = port নির্দিষ্ট করা" },
+        { "prompt": "192.168.1.10 server-এ john হিসেবে SSH করে সরাসরি 'df -h' command চালাও", "accept": ["ssh john@192.168.1.10 \"df -h\"", "ssh john@192.168.1.10 'df -h'"], "explain": "ssh user@host \"command\" = remote-এ এক command চালায়" },
+        { "prompt": "report.txt file-টি john@192.168.1.10 server-এর /tmp/ directory-তে copy করো (scp)", "accept": ["scp report.txt john@192.168.1.10:/tmp/", "scp report.txt john@192.168.1.10:/tmp"], "explain": "scp <file> user@host:/path" }
+      ]
+    },
+    {
+      "id": "cron",
+      "name": "Cron Job",
+      "info": {
+        "summary": [
+          "Cron = নির্দিষ্ট সময়ে স্বয়ংক্রিয়ভাবে command/script চালানোর scheduler।",
+          "crontab format: 5টি ক্ষেত্র — মিনিট, ঘণ্টা, day-of-month, month, day-of-week — তারপর command।",
+          "যেমন: 0 0 * * * /backup.sh → প্রতিদিন রাত 12টায় চালায়। */5 * * * * → প্রতি 5 মিনিট পর পর।"
+        ],
+        "table": {
+          "headers": ["ক্ষেত্র", "মান"],
+          "rows": [
+            ["মিনিট", "0-59"],
+            ["ঘণ্টা", "0-23"],
+            ["day of month", "1-31"],
+            ["month", "1-12"],
+            ["day of week", "0-6 (0=রবি)"]
+          ]
+        }
+      },
+      "commands": [
+        { "cmd": "crontab -e", "desc": "cron job edit করা" },
+        { "cmd": "crontab -l", "desc": "cron job list দেখা" },
+        { "cmd": "crontab -r", "desc": "সব cron job মুছে ফেলা" },
+        { "cmd": "0 0 * * * /backup.sh", "desc": "প্রতিদিন রাত 12টায় (00:00) চালানো" },
+        { "cmd": "*/5 * * * * /script.sh", "desc": "প্রতি 5 মিনিট অন্তর চালানো (minute field */5 = প্রতি ৫ম মিনিটে; */N = step value)" },
+        { "cmd": "* * * * * cmd >> /var/log/out.log 2>&1", "desc": "output ও error log-এ পাঠানো" },
+        { "cmd": "*/5 * * * * /script.sh >> /var/log/script.log 2>&1", "desc": "প্রতি 5 মিনিটে চালিয়ে output+error log-এ যোগ" }
+      ],
+      "practice": [
+        { "prompt": "cron job edit করার জন্য crontab খোলো", "accept": ["crontab -e"], "explain": "-e = edit" },
+        { "prompt": "তোমার বর্তমান cron job গুলো list করো", "accept": ["crontab -l"], "explain": "-l = list" },
+        { "prompt": "প্রতিদিন রাত 12টায় (00:00) /backup.sh চালানোর cron line লেখো", "accept": ["0 0 * * * /backup.sh"], "explain": "মিনিট=0, ঘণ্টা=0, বাকি সব *" },
+        { "prompt": "প্রতি 5 মিনিট অন্তর /script.sh চালানোর cron line লেখো", "accept": ["*/5 * * * * /script.sh"], "explain": "*/5 = প্রতি 5 মিনিটে" },
+        { "prompt": "প্রতি 5 মিনিট অন্তর /script.sh চালিয়ে output ও error /var/log/script.log-এ যোগ করার cron line লেখো", "accept": ["*/5 * * * * /script.sh >> /var/log/script.log 2>&1"], "explain": ">> = append, 2>&1 = error-ও একই জায়গায়" }
+      ]
+    },
+    {
+      "id": "logs",
+      "name": "Log Files",
+      "info": {
+        "summary": [
+          "/var/log-এ system ও service-এর সব log file থাকে।",
+          "গুরুত্বপূর্ণ: /var/log/syslog (general), /var/log/auth.log (login/security), dmesg (kernel)।",
+          "দেখা: cat (পুরোটা), tail (শেষ অংশ), tail -f (live follow), grep (নির্দিষ্ট শব্দ খোঁজা)।"
+        ]
+      },
+      "commands": [
+        { "cmd": "cat /var/log/syslog", "desc": "log file-এর পুরো content" },
+        { "cmd": "head -n 15 /var/log/syslog", "desc": "প্রথম 15 লাইন (tail-এর উল্টো)" },
+        { "cmd": "tail -n 50 /var/log/syslog", "desc": "শেষ 50 লাইন" },
+        { "cmd": "tail -f /var/log/syslog", "desc": "live ভাবে নতুন log দেখা" },
+        { "cmd": "sed -n '20,22p' /var/log/syslog", "desc": "নির্দিষ্ট লাইন range (20-22) print" },
+        { "cmd": "sed -n '20p' /var/log/syslog", "desc": "শুধু একটি নির্দিষ্ট লাইন (20তম) print" },
+        { "cmd": "grep error /var/log/auth.log", "desc": "log file-এ একটি শব্দ (error) খোঁজা" },
+        { "cmd": "grep error /var/log/syslog | tail -20", "desc": "error-যুক্ত লাইনের শেষ 20টা (pipe)" },
+        { "cmd": "grep \"Failed password\" /var/log/auth.log | wc -l", "desc": "failed login গণনা (pipe)" },
+        { "cmd": "journalctl -u nginx", "desc": "service-এর systemd log দেখা" },
+        { "cmd": "journalctl -u nginx --since today", "desc": "service-এর আজকের log" }
+      ],
+      "practice": [
+        { "prompt": "/var/log/syslog file-টির শেষ অংশ live ভাবে দেখতে থাকো (follow)", "accept": ["tail -f /var/log/syslog"], "explain": "-f = follow (নতুন লাইন আসতে থাকলে দেখায়)" },
+        { "prompt": "/var/log/syslog-এর শেষ 50 লাইন দেখাও", "accept": ["tail -n 50 /var/log/syslog", "tail -50 /var/log/syslog"], "explain": "-n 50 = শেষ 50 লাইন" },
+        { "prompt": "/var/log/syslog-এর প্রথম 15 লাইন দেখাও", "accept": ["head -n 15 /var/log/syslog", "head -15 /var/log/syslog"], "explain": "head = শুরুর অংশ; -n 15 = প্রথম 15 লাইন" },
+        { "prompt": "/var/log/syslog-এর 20 থেকে 22 নম্বর লাইন print করো (sed)", "accept": ["sed -n '20,22p' /var/log/syslog", "sed -n \"20,22p\" /var/log/syslog"], "explain": "sed -n 'start,endp' = ঐ range-এর লাইন গুলো print" },
+        { "prompt": "/var/log/syslog-এর শুধু 20তম লাইন print করো (sed)", "accept": ["sed -n '20p' /var/log/syslog", "sed -n \"20p\" /var/log/syslog"], "explain": "sed -n 'Np' = শুধু N নম্বর লাইন" },
+        { "prompt": "/var/log/auth.log file-এ 'error' শব্দটি খুঁজে বের করো", "accept": ["grep error /var/log/auth.log", "grep 'error' /var/log/auth.log", "grep \"error\" /var/log/auth.log"], "explain": "grep <word> <file>" },
+        { "prompt": "nginx service-এর systemd log দেখাও", "accept": ["journalctl -u nginx", "sudo journalctl -u nginx"], "explain": "journalctl -u <service>" },
+        { "prompt": "/var/log/syslog-এ error যুক্ত লাইনের শেষ 20টা দেখাও (grep + tail pipe)", "accept": ["grep error /var/log/syslog | tail -20", "grep error /var/log/syslog | tail -n 20", "grep 'error' /var/log/syslog | tail -20"], "explain": "grep output পাইপ করে tail দিয়ে শেষ অংশ" },
+        { "prompt": "/var/log/auth.log-এ 'Failed password' কতবার আছে গুনে দেখাও", "accept": ["grep \"Failed password\" /var/log/auth.log | wc -l", "grep 'Failed password' /var/log/auth.log | wc -l"], "explain": "grep + wc -l = match গণনা" }
+      ]
+    },
+    {
+      "id": "services",
+      "name": "Service Management",
+      "info": {
+        "summary": [
+          "systemd দিয়ে background service (daemon) নিয়ন্ত্রণ — start/stop/restart/enable।",
+          "status ও journalctl দিয়ে service-এর অবস্থা ও log দেখা যায়।",
+          "start = এখনই চালু; enable = boot-এ auto চালু — দুটো আলাদা।"
+        ]
+      },
+      "commands": [
+        { "cmd": "sudo systemctl start nginx", "desc": "service এখনই চালু" },
+        { "cmd": "sudo systemctl stop nginx", "desc": "service বন্ধ" },
+        { "cmd": "sudo systemctl restart nginx", "desc": "service restart" },
+        { "cmd": "sudo systemctl reload nginx", "desc": "config reload (বন্ধ না করে)" },
+        { "cmd": "systemctl status nginx", "desc": "service-এর অবস্থা" },
+        { "cmd": "sudo systemctl enable nginx", "desc": "boot-এ auto চালু" },
+        { "cmd": "systemctl is-active nginx", "desc": "চালু (active) আছে কিনা" },
+        { "cmd": "systemctl --failed", "desc": "fail করা service গুলো" },
+        { "cmd": "sudo systemctl daemon-reload", "desc": "unit file বদলালে systemd reload" },
+        { "cmd": "journalctl -u nginx -f", "desc": "service log live দেখা" }
+      ],
+      "practice": [
+        { "prompt": "nginx service এখনই চালু করো", "accept": ["sudo systemctl start nginx", "systemctl start nginx"], "explain": "start = এখনই চালু" },
+        { "prompt": "nginx service বন্ধ করো", "accept": ["sudo systemctl stop nginx", "systemctl stop nginx"], "explain": "stop = এখনই বন্ধ" },
+        { "prompt": "nginx-এর config বন্ধ না করেই reload করো", "accept": ["sudo systemctl reload nginx", "systemctl reload nginx"], "explain": "reload = service না থামিয়ে নতুন config নেয়" },
+        { "prompt": "nginx boot-এ auto চালু হবে এমন সেট করো", "accept": ["sudo systemctl enable nginx", "systemctl enable nginx"], "explain": "enable = boot-এ চালু হবে" },
+        { "prompt": "nginx এখন active আছে কিনা দেখাও", "accept": ["systemctl is-active nginx", "sudo systemctl is-active nginx"], "explain": "is-active = active/inactive জানায়" },
+        { "prompt": "কোন কোন service fail করেছে দেখাও", "accept": ["systemctl --failed", "sudo systemctl --failed", "systemctl list-units --failed"], "explain": "--failed = failed unit list" },
+        { "prompt": "unit file পরিবর্তনের পর systemd reload করো", "accept": ["sudo systemctl daemon-reload", "systemctl daemon-reload"], "explain": "daemon-reload = systemd নতুন unit file পড়ে" },
+        { "prompt": "nginx service-এর log live ভাবে দেখো", "accept": ["journalctl -u nginx -f", "sudo journalctl -u nginx -f"], "explain": "-u service, -f = follow" }
+      ]
+    },
+    {
+      "id": "transfer",
+      "name": "File Transfer",
+      "info": {
+        "summary": [
+          "scp = SSH-এর উপর দিয়ে নিরাপদে file copy (local ↔ remote)।",
+          "remote path-এর format: user@host:/path — উৎস বা গন্তব্য যেকোনোটি remote হতে পারে।"
+        ]
+      },
+      "commands": [
+        { "cmd": "scp file.txt user@host:/tmp/", "desc": "remote server-এ file পাঠানো" },
+        { "cmd": "scp user@host:/tmp/file.txt .", "desc": "remote থেকে file আনা" }
+      ],
+      "practice": [
+        { "prompt": "report.txt file-টি user@server:/tmp/-এ scp দিয়ে পাঠাও", "accept": ["scp report.txt user@server:/tmp/", "scp report.txt user@server:/tmp"], "explain": "scp <file> user@host:/path" },
+        { "prompt": "user@server:/tmp/data.txt file-টি current directory-তে scp দিয়ে আনো", "accept": ["scp user@server:/tmp/data.txt .", "scp user@server:/tmp/data.txt ./"], "explain": "scp user@host:/path <local>" }
+      ]
+    }
+  ]
+}

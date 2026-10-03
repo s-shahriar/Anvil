@@ -23,6 +23,8 @@ import com.syed.anvil.ui.screen.HomeScreen
 import com.syed.anvil.ui.screen.ModeSelectScreen
 import com.syed.anvil.ui.screen.ModuleNav
 import com.syed.anvil.ui.screen.ModuleScreen
+import com.syed.anvil.ui.screen.PracticeImportantScreen
+import com.syed.anvil.ui.screen.PracticeScreen
 import com.syed.anvil.ui.screen.QuizScreen
 import com.syed.anvil.ui.screen.ReaderScreen
 import com.syed.anvil.ui.screen.SavedScreen
@@ -71,6 +73,8 @@ fun AnvilNav(vm: AnvilViewModel, dark: Boolean, activity: Activity) {
                         onExam = { g -> nav.navigate("exam/${id.key}?group=$g") },
                         onSaved = { kind, g -> nav.navigate("saved/${id.key}/${kind.key}/$g") },
                         onWritten = { nav.navigate("written/${id.key}") },
+                        onPractice = { cat -> nav.navigate("practice/$cat") },
+                        onPracticeImportant = { nav.navigate("practiceimp") },
                         onSearchHit = { item ->
                             val dest = if (LongForm.isLongForm(item)) "read" else "study"
                             nav.navigate("$dest/${id.key}/${item.group}/${item.topic}?focus=${Uri.encode(item.uid ?: "")}")
@@ -122,6 +126,12 @@ fun AnvilNav(vm: AnvilViewModel, dark: Boolean, activity: Activity) {
                     },
                 )
             }
+        }
+        composable("practice/{cat}") { e ->
+            Themed(Scope.ICT) { PracticeScreen(vm, e.arg("cat"), onBack = { nav.popBackStack() }) }
+        }
+        composable("practiceimp") {
+            Themed(Scope.ICT) { PracticeImportantScreen(vm, onBack = { nav.popBackStack() }) }
         }
         composable("written/{m}") { e ->
             Themed(e.module().scope()) { WrittenDataScreen(vm, onBack = { nav.popBackStack() }) }

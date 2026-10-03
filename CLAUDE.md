@@ -56,7 +56,9 @@ Three scopes in `ui/theme/Palette.kt`: `SHELL` (rust, the Anvil home/settings), 
 3. ✅ ICT Written/Extra/Viva reader (`ui/reader`, `ReaderScreen`): accordion cards, segments + sub-segments, hanging-indent
    questions, all answer blocks (code with highlighting, image, summary, points, ASCII diagram, table, mistakes, mnemonic,
    extended), search into answers with deep-link, flags/notes, resumable offline picture cache.
-4. Practice (Linux/SQL drill), Equation (KaTeX + diagrams, bundled), highlights (offset anchoring, keep web compatible).
+4. ✅ Practice (`practice/`, `ui/practice`, `PracticeScreens`): bundled `assets/practice/{linux,sql}.json`, Info/Commands/Practice tabs, SQL-forgiving
+   answer matching (ported exactly; flag ids `practice__<cat>__<topic>__<cmd>` match the web), Important list across both. It is a virtual
+   "Practice" group on the ICT module screen. Still to do: Equation (KaTeX + hand-drawn SVG diagrams, bundled), highlights.
 5. Mobile extras (reminders, streaks, spaced repetition, timed exams).
 
 ## Open items (check later)
@@ -66,7 +68,9 @@ Three scopes in `ui/theme/Palette.kt`: `SHELL` (rust, the Anvil home/settings), 
   Check size/aspect, dark mode, and the "Image not available offline" placeholder with the cache cleared.
 - Not yet looked at by hand: Extra and Viva readers, the Nailed/Important lists for long-form cards, Settings "Pictures: x of y",
   dark theme on the new screens, tablets / large font sizes.
-- Not built yet: left/right-hand toggle, recycle bin, General Utility pages (math formulas with KaTeX, financial terms).
+- Not built yet: left/right-hand toggle, recycle bin, General Utility pages (math formulas with KaTeX, financial terms), ICT Equation.
+- Practice is verified for Linux and the SQL first topic only; SQL answers with multi-line `answers`, the Commands tab and the Important
+  list screen have not been looked at by hand.
 
 ## Testing notes
 - Unit tests cover uid hashing, flag rules/queue, HTML parsing, pools/search, updater helpers (27 tests).

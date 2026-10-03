@@ -1,0 +1,1070 @@
+{
+  "category": "sql",
+  "name": "SQL",
+  "sampleData": {
+    "branch": {
+      "columns": ["branch_id", "branch_name", "location", "manager"],
+      "rows": [
+        [1, "Dhaka HQ", "Dhaka", "Karim"],
+        [2, "Chittagong", "Chittagong", "Rahim"],
+        [3, "Sylhet", "Sylhet", "Hasan"]
+      ]
+    },
+    "employee": {
+      "columns": ["employee_id", "name", "branch_id", "gender", "join_date", "birthdate", "city"],
+      "rows": [
+        [1, "Ayesha", 1, "Female", "2026-03-01", "1998-06-15", "Dhaka"],
+        [2, "Bashir", 1, "Male", "2023-11-20", "1995-01-30", "Dhaka"],
+        [3, "Chowdhury", 2, "Male", "2024-01-15", "1999-09-10", "Chittagong"],
+        [4, "Dina", 2, "Female", "2022-07-05", "1992-12-25", "Chittagong"],
+        [5, "Emon", 3, "Male", "2026-05-10", "2000-03-18", "Sylhet"],
+        [6, "Faria", 3, "Female", "2023-02-28", "1997-08-08", "Sylhet"]
+      ]
+    },
+    "salary": {
+      "columns": ["salary_id", "employee_id", "amount", "date"],
+      "rows": [
+        [1, 1, 55000, "2026-06-01"],
+        [2, 2, 72000, "2026-06-01"],
+        [3, 3, 50000, "2026-05-05"],
+        [4, 4, 90000, "2026-05-05"],
+        [5, 5, 50000, "2026-06-01"]
+      ]
+    }
+  },
+  "sampleDataBySet": {
+    "A": {
+      "EmployeeDetails": {
+        "columns": ["EmpId", "FullName", "ManagerId", "DateOfJoining"],
+        "rows": [
+          [1, "Arjun", null, "2014-05-10"],
+          [2, "Bhuvan", 1, "2016-03-22"],
+          [3, "Charu", 1, "2016-11-01"],
+          [4, "Deepa", 2, "2018-07-15"],
+          [5, "Esha", 2, "2016-01-30"],
+          [6, "Farhan", 3, "2020-09-05"]
+        ]
+      },
+      "EmployeeSalary": {
+        "columns": ["EmpId", "Project", "Salary"],
+        "rows": [
+          [1, "P1", 8000],
+          [2, "P1", 12000],
+          [3, "P2", 6000],
+          [4, "P2", 9000],
+          [5, "P3", 4000]
+        ]
+      },
+      "ManagerSalary": {
+        "columns": ["EmpId", "Project", "Salary"],
+        "rows": [
+          [1, "P1", 8000],
+          [2, "P1", 12000],
+          [7, "P4", 15000]
+        ]
+      }
+    }
+  },
+  "topics": [
+    {
+      "id": "a-filter",
+      "set": "A",
+      "name": "WHERE, Operators & Count",
+      "info": {
+        "summary": [
+          "WHERE দিয়ে শর্ত দিয়ে row filter করা হয় — শর্ত মিললে সেই row আসে।",
+          "তুলনার operator: = , <> বা != (সমান নয়), > , < , >= , <= ।",
+          "COUNT(*) দিয়ে filter-করা row শেষে কতগুলো হলো তা গোনা যায়।"
+        ],
+        "table": {
+          "headers": ["Operator / Clause", "অর্থ"],
+          "rows": [
+            ["=", "সমান"],
+            ["<> বা !=", "সমান নয়"],
+            ["> , <", "বড় / ছোট"],
+            [">= , <=", "বড়-সমান / ছোট-সমান"],
+            ["COUNT(*)", "row সংখ্যা গোনা"]
+          ]
+        }
+      },
+      "commands": [
+        {"cmd": "WHERE Project = 'P1'", "desc": "শুধু P1 project-এর row"},
+        {"cmd": "COUNT(*)", "desc": "কতগুলো row আছে"}
+      ],
+      "practice": [
+        {
+          "prompt": "'P1' project-এ কতজন employee কাজ করে — count বের করো।",
+          "accept": [
+            "SELECT COUNT(*) FROM EmployeeSalary WHERE Project = 'P1';",
+            "SELECT COUNT(*) FROM EmployeeSalary WHERE Project = \"P1\";",
+            "SELECT COUNT(EmpId) FROM EmployeeSalary WHERE Project = 'P1';"
+          ],
+          "explain": "WHERE Project = 'P1' শুধু P1-এর row রাখে, COUNT(*) সেগুলো গোনে।"
+        },
+        {
+          "prompt": "table থেকে শুধু odd (বিজোড় EmpId) row বের করো।",
+          "accept": [
+            "SELECT * FROM EmployeeSalary WHERE MOD(EmpId, 2) = 1;",
+            "SELECT * FROM EmpSalary WHERE MOD(EmpId, 2) = 1;",
+            "SELECT * FROM EmployeeSalary WHERE EmpId % 2 = 1;"
+          ],
+          "explain": "MOD(EmpId, 2) ভাগশেষ দেয়; বিজোড় EmpId-তে ভাগশেষ 1, তাই শুধু odd row আসে। even চাইলে = 0।"
+        }
+      ]
+    },
+    {
+      "id": "a-group",
+      "set": "A",
+      "name": "Aggregation & Grouping",
+      "info": {
+        "summary": [
+          "GROUP BY একই মানের row-গুলোকে একদলে এনে প্রতি দলে aggregate (COUNT/SUM) বের করে।",
+          "এখানে প্রতিটি Project আলাদা দল; COUNT(EmpId) দিয়ে দলের সদস্য গোনা হয়।",
+          "alias (AS) দিয়ে দেওয়া নাম ORDER BY ... DESC-এ ব্যবহার করে count বেশি থেকে কম সাজানো যায়।"
+        ],
+        "table": {
+          "headers": ["Clause", "কাজ"],
+          "rows": [
+            ["GROUP BY Project", "Project অনুযায়ী দল"],
+            ["COUNT(EmpId)", "দলে কতজন"],
+            ["AS EmpProjectCount", "ফল-column-এর নাম"],
+            ["ORDER BY ... DESC", "বড় থেকে ছোট সাজানো"]
+          ]
+        }
+      },
+      "commands": [
+        {"cmd": "GROUP BY Project", "desc": "Project অনুযায়ী দল"},
+        {"cmd": "COUNT(EmpId) AS EmpProjectCount", "desc": "দলে কতজন, নাম দেওয়া"},
+        {"cmd": "ORDER BY EmpProjectCount DESC", "desc": "count বেশি থেকে কম"}
+      ],
+      "practice": [
+        {
+          "prompt": "Project অনুযায়ী employee-র count বের করো, এবং count বেশি থেকে কম এ সাজাও।",
+          "accept": [
+            "SELECT Project, COUNT(EmpId) AS EmpProjectCount FROM EmployeeSalary GROUP BY Project ORDER BY EmpProjectCount DESC;",
+            "SELECT Project, COUNT(*) AS EmpProjectCount FROM EmployeeSalary GROUP BY Project ORDER BY EmpProjectCount DESC;",
+            "SELECT Project, COUNT(EmpId) FROM EmployeeSalary GROUP BY Project ORDER BY COUNT(EmpId) DESC;"
+          ],
+          "answers": ["SELECT Project, COUNT(EmpId) AS EmpProjectCount\nFROM EmployeeSalary\nGROUP BY Project\nORDER BY EmpProjectCount DESC;"],
+          "explain": "GROUP BY Project প্রতি project-কে দল করে; COUNT দলের সদস্য গোনে; alias EmpProjectCount দিয়ে ORDER BY DESC সাজায়।"
+        }
+      ]
+    },
+    {
+      "id": "a-joins",
+      "set": "A",
+      "name": "Joins (LEFT & Self)",
+      "info": {
+        "summary": [
+          "JOIN দুই table-এর মিল-করা row একসাথে আনে; এখানে EmpId দিয়ে EmployeeDetails ও EmployeeSalary মেলানো হয়।",
+          "LEFT JOIN বাঁ table-এর সব row রাখে — মিল না পেলে ডান পাশের column NULL হয় (যেমন salary না থাকা employee)।",
+          "Self-join: একই table-কে দুই alias-এ নিজের সাথে মেলানো; এক row-এর EmpId অন্য row-এর ManagerId হলে সে একজন manager।"
+        ],
+        "table": {
+          "headers": ["Clause", "কাজ"],
+          "rows": [
+            ["LEFT JOIN", "বাঁ table-এর সব row রাখে"],
+            ["ON E.EmpId = S.EmpId", "EmpId দিয়ে মেলানো"],
+            ["INNER JOIN (self)", "table-কে নিজের সাথে মেলানো"],
+            ["DISTINCT", "একই নাম একবার"]
+          ]
+        }
+      },
+      "commands": [
+        {"cmd": "LEFT JOIN EmployeeSalary S ON E.EmpId = S.EmpId", "desc": "salary না থাকলেও employee থাকে"},
+        {"cmd": "INNER JOIN EmployeeDetails M ON E.EmpId = M.ManagerId", "desc": "self-join: কে manager"},
+        {"cmd": "SELECT DISTINCT E.FullName", "desc": "একই নাম একবার"}
+      ],
+      "practice": [
+        {
+          "prompt": "প্রতিটি employee-র নাম ও salary দেখাও — salary record না থাকলেও employee-র তথ্য থাকবে।",
+          "accept": [
+            "SELECT E.FullName, S.Salary FROM EmployeeDetails E LEFT JOIN EmployeeSalary S ON E.EmpId = S.EmpId;",
+            "SELECT E.FullName, S.Salary FROM EmployeeDetails E LEFT OUTER JOIN EmployeeSalary S ON E.EmpId = S.EmpId;"
+          ],
+          "answers": ["SELECT E.FullName, S.Salary\nFROM EmployeeDetails E\nLEFT JOIN EmployeeSalary S ON E.EmpId = S.EmpId;"],
+          "explain": "LEFT JOIN বাঁ table EmployeeDetails-এর সব row রাখে; salary না থাকলে S.Salary NULL আসে।"
+        },
+        {
+          "prompt": "EmployeeDetails থেকে যেসব employee নিজেই কারো manager, তাদের নাম বের করো (self-join)।",
+          "accept": [
+            "SELECT DISTINCT E.FullName FROM EmployeeDetails E INNER JOIN EmployeeDetails M ON E.EmpId = M.ManagerId;",
+            "SELECT DISTINCT E.FullName FROM EmployeeDetails E JOIN EmployeeDetails M ON E.EmpId = M.ManagerId;",
+            "SELECT DISTINCT E.FullName FROM EmpDetails E INNER JOIN EmpDetails M ON E.EmpId = M.ManagerId;"
+          ],
+          "answers": ["SELECT DISTINCT E.FullName\nFROM EmployeeDetails E\nINNER JOIN EmployeeDetails M ON E.EmpId = M.ManagerId;"],
+          "explain": "একই table দুই alias E ও M; E.EmpId যদি কোনো M.ManagerId হয় তবে E একজন manager। DISTINCT একই নাম একবার রাখে।"
+        }
+      ]
+    },
+    {
+      "id": "a-subquery",
+      "set": "A",
+      "name": "Subqueries (IN, BETWEEN, EXISTS)",
+      "info": {
+        "summary": [
+          "Subquery = query-র ভেতরে আরেকটি query; ভেতরের ফল দিয়ে বাইরের query filter করা হয়।",
+          "IN (subquery): ভেতরের query যেসব EmpId দেয় তাদের নাম বাইরে আনা হয়। BETWEEN 5000 AND 10000 দুই প্রান্ত সহ range।",
+          "EXISTS: correlated subquery অন্তত একটি row ফেরালে সত্য — এখানে যাদের salary record আছে শুধু তারাই আসে।"
+        ],
+        "table": {
+          "headers": ["Tool", "কাজ"],
+          "rows": [
+            ["IN (SELECT ...)", "ভেতরের তালিকায় থাকলে"],
+            ["BETWEEN a AND b", "a থেকে b পর্যন্ত (দুই প্রান্ত সহ)"],
+            ["EXISTS (SELECT ...)", "row থাকলে সত্য"],
+            ["correlated subquery", "বাইরের row ধরে ভেতরে মেলানো"]
+          ]
+        }
+      },
+      "commands": [
+        {"cmd": "WHERE EmpId IN (SELECT EmpId FROM EmployeeSalary WHERE Salary BETWEEN 5000 AND 10000)", "desc": "salary range-এর EmpId"},
+        {"cmd": "WHERE EXISTS (SELECT * FROM EmployeeSalary S WHERE E.EmpId = S.EmpId)", "desc": "salary record আছে যাদের"}
+      ],
+      "practice": [
+        {
+          "prompt": "যেসব employee-র salary 5000 থেকে 10000-এর মধ্যে (দুই প্রান্ত সহ), তাদের নাম বের করো।",
+          "accept": [
+            "SELECT FullName FROM EmployeeDetails WHERE EmpId IN (SELECT EmpId FROM EmployeeSalary WHERE Salary BETWEEN 5000 AND 10000);",
+            "SELECT FullName FROM EmployeeDetails WHERE EmpId IN (SELECT EmpId FROM EmployeeSalary WHERE Salary >= 5000 AND Salary <= 10000);",
+            "SELECT DISTINCT e.FullName FROM EmployeeDetails e JOIN EmployeeSalary s ON e.EmpId = s.EmpId WHERE s.Salary BETWEEN 5000 AND 10000;",
+            "SELECT DISTINCT e.FullName FROM EmployeeDetails e INNER JOIN EmployeeSalary s ON e.EmpId = s.EmpId WHERE s.Salary BETWEEN 5000 AND 10000;",
+            "SELECT DISTINCT e.FullName FROM EmployeeDetails e JOIN EmployeeSalary s ON e.EmpId = s.EmpId WHERE s.Salary >= 5000 AND s.Salary <= 10000;",
+            "SELECT e.FullName FROM EmployeeDetails e JOIN EmployeeSalary s ON e.EmpId = s.EmpId WHERE s.Salary BETWEEN 5000 AND 10000;"
+          ],
+          "answers": [
+            "SELECT FullName FROM EmployeeDetails\nWHERE EmpId IN (\n  SELECT EmpId FROM EmployeeSalary\n  WHERE Salary BETWEEN 5000 AND 10000\n);",
+            "SELECT DISTINCT e.FullName\nFROM EmployeeDetails e\nJOIN EmployeeSalary s ON e.EmpId = s.EmpId\nWHERE s.Salary BETWEEN 5000 AND 10000;"
+          ],
+          "explain": "দুইভাবে করা যায় —\n(1) Subquery: ভেতরের query salary 5000–10000 হওয়া EmpId দেয়, বাইরে সেই FullName আনে।\n(2) JOIN: EmpId দিয়ে দুই table মিলিয়ে WHERE BETWEEN; এক employee-র একাধিক salary থাকলে DISTINCT দরকার।\nBETWEEN দুই প্রান্ত সহ।"
+        },
+        {
+          "prompt": "EmployeeSalary-তে salary record আছে এমন সব employee record EmployeeDetails থেকে বের করো (EXISTS দিয়ে)।",
+          "accept": [
+            "SELECT * FROM EmployeeDetails E WHERE EXISTS (SELECT * FROM EmployeeSalary S WHERE E.EmpId = S.EmpId);",
+            "SELECT * FROM EmployeeDetails E WHERE EXISTS (SELECT 1 FROM EmployeeSalary S WHERE E.EmpId = S.EmpId);",
+            "SELECT * FROM EmployeeDetails WHERE EmpId IN (SELECT EmpId FROM EmployeeSalary);",
+            "SELECT * FROM EmployeeDetails E WHERE E.EmpId IN (SELECT EmpId FROM EmployeeSalary);",
+            "SELECT * FROM EmployeeDetails E WHERE E.EmpId IN (SELECT S.EmpId FROM EmployeeSalary S);",
+            "SELECT DISTINCT e.* FROM EmployeeDetails e JOIN EmployeeSalary s ON e.EmpId = s.EmpId;",
+            "SELECT DISTINCT e.* FROM EmployeeDetails e INNER JOIN EmployeeSalary s ON e.EmpId = s.EmpId;"
+          ],
+          "answers": [
+            "SELECT * FROM EmployeeDetails E\nWHERE EXISTS (\n  SELECT * FROM EmployeeSalary S\n  WHERE E.EmpId = S.EmpId\n);",
+            "SELECT * FROM EmployeeDetails\nWHERE EmpId IN (\n  SELECT EmpId FROM EmployeeSalary\n);",
+            "SELECT DISTINCT e.*\nFROM EmployeeDetails e\nJOIN EmployeeSalary s ON e.EmpId = s.EmpId;"
+          ],
+          "explain": "তিনভাবে করা যায় —\n(1) EXISTS: প্রতিটি E-র জন্য EmployeeSalary-তে মিল-করা EmpId থাকলে subquery row ফেরায়, তখন সেই E আসে।\n(2) IN: EmployeeSalary-র EmpId তালিকায় থাকলে।\n(3) JOIN: EmpId দিয়ে মিলিয়ে DISTINCT (এক employee-র একাধিক salary থাকলে একবার আসে)।"
+        }
+      ]
+    },
+    {
+      "id": "a-duplicates",
+      "set": "A",
+      "name": "Duplicates (find)",
+      "info": {
+        "summary": [
+          "একই মানের একাধিক row = duplicate; GROUP BY + HAVING COUNT(*) > 1 দিয়ে এদের চিহ্নিত করা হয়।",
+          "HAVING দলের উপর শর্ত দেয় (WHERE single row-এর উপর) — তাই COUNT-এর মতো aggregate-এ HAVING লাগে।"
+        ],
+        "table": {
+          "headers": ["Clause", "কাজ"],
+          "rows": [
+            ["GROUP BY col, ...", "একই মানের row একদলে"],
+            ["HAVING COUNT(*) > 1", "একাধিকবার আসা দল"]
+          ]
+        }
+      },
+      "commands": [
+        {"cmd": "GROUP BY EmpId, Project, Salary HAVING COUNT(*) > 1", "desc": "duplicate দল খোঁজা"}
+      ],
+      "practice": [
+        {
+          "prompt": "একটি table থেকে duplicate (একাধিকবার আসা) record বের করো।",
+          "accept": [
+            "SELECT EmpId, Project, Salary, COUNT(*) FROM EmployeeSalary GROUP BY EmpId, Project, Salary HAVING COUNT(*) > 1;"
+          ],
+          "answers": ["SELECT EmpId, Project, Salary, COUNT(*)\nFROM EmployeeSalary\nGROUP BY EmpId, Project, Salary\nHAVING COUNT(*) > 1;"],
+          "explain": "সব column-এ GROUP BY করে যেসব দলে COUNT(*) > 1 সেগুলোই duplicate। HAVING দল-ভিত্তিক শর্ত (WHERE row-ভিত্তিক)।"
+        }
+      ]
+    },
+    {
+      "id": "a-setops",
+      "set": "A",
+      "name": "Set Operations (INTERSECT / MINUS)",
+      "info": {
+        "summary": [
+          "দুই query-র ফলকে set হিসেবে মিলিয়ে কাজ করা হয়; দুদিকের column সংখ্যা ও type মিলতে হবে।",
+          "INTERSECT দুদিকেই থাকা (common) row দেয়।",
+          "MINUS (কোথাও EXCEPT) প্রথম query-তে আছে কিন্তু দ্বিতীয়টিতে নেই এমন row দেয়।"
+        ],
+        "table": {
+          "headers": ["Operator", "কাজ"],
+          "rows": [
+            ["INTERSECT", "দুদিকের common row"],
+            ["MINUS / EXCEPT", "প্রথমে আছে, দ্বিতীয়ে নেই"],
+            ["UNION", "দুদিকের সব (duplicate বাদ)"]
+          ]
+        }
+      },
+      "commands": [
+        {"cmd": "SELECT ... INTERSECT SELECT ...", "desc": "common record"},
+        {"cmd": "SELECT ... MINUS SELECT ...", "desc": "একটিতে আছে, অন্যটিতে নেই"}
+      ],
+      "practice": [
+        {
+          "prompt": "দুটি table-এর মধ্যে common (একই) record বের করো।",
+          "accept": [
+            "SELECT * FROM EmployeeSalary INTERSECT SELECT * FROM ManagerSalary;"
+          ],
+          "answers": ["SELECT * FROM EmployeeSalary\nINTERSECT\nSELECT * FROM ManagerSalary;"],
+          "explain": "INTERSECT দুই query-র দুদিকেই থাকা (common) row-গুলো দেয়।"
+        },
+        {
+          "prompt": "এক table-এ আছে কিন্তু অন্য table-এ নেই এমন record বের করো।",
+          "accept": [
+            "SELECT * FROM EmployeeSalary MINUS SELECT * FROM ManagerSalary;",
+            "SELECT * FROM EmployeeSalary EXCEPT SELECT * FROM ManagerSalary;"
+          ],
+          "answers": ["SELECT * FROM EmployeeSalary\nMINUS\nSELECT * FROM ManagerSalary;"],
+          "explain": "MINUS প্রথম query-র যেসব row দ্বিতীয়টিতে নেই সেগুলো দেয় (SQL Server/Postgres-এ EXCEPT)।"
+        }
+      ]
+    },
+    {
+      "id": "a-tables",
+      "set": "A",
+      "name": "Copy Tables (SELECT INTO)",
+      "info": {
+        "summary": [
+          "SELECT * INTO newTable FROM oldTable structure ও সব data সহ নতুন table বানায়।",
+          "শুধু structure (খালি table) চাইলে WHERE 1 = 0 যোগ করো — শর্ত কখনো সত্য না হওয়ায় কোনো row যায় না।",
+          "আগে থেকে newTable তৈরি করার দরকার নেই; query-ই বানিয়ে দেয়।"
+        ],
+        "table": {
+          "headers": ["Query", "ফল"],
+          "rows": [
+            ["SELECT * INTO new FROM old", "structure + data copy"],
+            ["... WHERE 1 = 0", "শুধু structure, খালি table"]
+          ]
+        }
+      },
+      "commands": [
+        {"cmd": "SELECT * INTO newTable FROM EmployeeDetails", "desc": "data সহ copy"},
+        {"cmd": "SELECT * INTO newTable FROM EmployeeDetails WHERE 1 = 0", "desc": "খালি table, একই structure"}
+      ],
+      "practice": [
+        {
+          "prompt": "অন্য table থেকে data ও structure দুটোই copy করে নতুন table বানাও।",
+          "accept": [
+            "SELECT * INTO newTable FROM EmployeeDetails;"
+          ],
+          "explain": "SELECT * INTO newTable FROM ... structure সহ সব row নতুন table-এ copy করে।"
+        },
+        {
+          "prompt": "অন্য table-এর মতো একই structure-এর কিন্তু খালি (data ছাড়া) নতুন table বানাও।",
+          "accept": [
+            "SELECT * INTO newTable FROM EmployeeDetails WHERE 1 = 0;"
+          ],
+          "explain": "WHERE 1 = 0 কখনো সত্য হয় না, তাই কোনো row যায় না — শুধু structure copy হয়, table খালি থাকে।"
+        }
+      ]
+    },
+    {
+      "id": "a-datetime",
+      "set": "A",
+      "name": "Date & Time",
+      "info": {
+        "summary": [
+          "YEAR(), MONTH(), DAY() তারিখ থেকে সাল/মাস/দিন বের করে শর্ত মেলাতে কাজে লাগে।",
+          "current date-time: MySQL-এ NOW() বা CURRENT_TIMESTAMP দিয়ে পাওয়া যায়।",
+          "এক বছরের সব record পেতে YEAR(col) = 2016, অথবা BETWEEN দিয়ে বছরের শুরু–শেষ range।"
+        ],
+        "table": {
+          "headers": ["Function", "কাজ"],
+          "rows": [
+            ["YEAR(col)", "সাল (যেমন 2016)"],
+            ["MONTH(col)", "মাস (1–12)"],
+            ["DAY(col)", "দিন (1–31)"],
+            ["NOW() / CURRENT_TIMESTAMP", "এখনকার date-time"]
+          ]
+        }
+      },
+      "commands": [
+        {"cmd": "WHERE YEAR(DateOfJoining) = 2016", "desc": "2016 সালে join"},
+        {"cmd": "SELECT NOW();", "desc": "current date-time (MySQL)"}
+      ],
+      "practice": [
+        {
+          "prompt": "EmployeeDetails থেকে যারা 2016 সালে join করেছে তাদের সব record বের করো।",
+          "accept": [
+            "SELECT * FROM EmployeeDetails WHERE YEAR(DateOfJoining) = 2016;",
+            "SELECT * FROM EmployeeDetails WHERE YEAR(DateOfJoining) = '2016';",
+            "SELECT * FROM EmployeeSalary WHERE YEAR(DateOfJoining) = '2016';",
+            "SELECT * FROM EmployeeDetails WHERE DateOfJoining BETWEEN '2016-01-01' AND '2016-12-31';",
+            "SELECT * FROM EmployeeDetails WHERE DateOfJoining BETWEEN '01-01-2016' AND '31-12-2016';"
+          ],
+          "answers": [
+            "SELECT * FROM EmployeeDetails\nWHERE YEAR(DateOfJoining) = 2016;",
+            "SELECT * FROM EmployeeDetails\nWHERE DateOfJoining BETWEEN '01-01-2016' AND '31-12-2016';"
+          ],
+          "explain": "YEAR(DateOfJoining) তারিখ থেকে সাল বের করে 2016-এর সাথে মেলায়; বিকল্পে BETWEEN দিয়ে বছরের শুরু–শেষ range।"
+        }
+      ]
+    },
+    {
+      "id": "a-topn",
+      "set": "A",
+      "name": "Top-N & Nth Highest",
+      "info": {
+        "summary": [
+          "top N: MySQL-এ ORDER BY ... DESC LIMIT N; SQL Server-এ SELECT TOP N।",
+          "Nth highest: DESC সাজিয়ে প্রথম (N-1) টি skip করে পরের 1টি — LIMIT 1 OFFSET N-1 বা LIMIT N-1, 1।",
+          "Nth lowest একই নিয়ম, শুধু ORDER BY ASC; একই salary একাধিক থাকলে SELECT DISTINCT Salary।"
+        ],
+        "table": {
+          "headers": ["লক্ষ্য", "Form"],
+          "rows": [
+            ["top N (MySQL)", "ORDER BY col DESC LIMIT N"],
+            ["top N (SQL Server)", "SELECT TOP N ..."],
+            ["Nth highest", "DESC LIMIT 1 OFFSET N-1"],
+            ["Nth lowest", "ASC LIMIT 1 OFFSET N-1"]
+          ]
+        }
+      },
+      "commands": [
+        {"cmd": "ORDER BY Salary DESC LIMIT 3", "desc": "top 3 (MySQL)"},
+        {"cmd": "SELECT TOP 3 * FROM EmployeeSalary ORDER BY Salary DESC", "desc": "top 3 (SQL Server)"},
+        {"cmd": "ORDER BY Salary DESC LIMIT 1 OFFSET 2", "desc": "3rd highest (N-1 = 2)"}
+      ],
+      "practice": [
+        {
+          "prompt": "EmployeeSalary থেকে salary বেশি এমন top 3 record বের করো (MySQL — LIMIT)।",
+          "accept": [
+            "SELECT * FROM EmployeeSalary ORDER BY Salary DESC LIMIT 3;"
+          ],
+          "answers": ["SELECT * FROM EmployeeSalary\nORDER BY Salary DESC\nLIMIT 3;"],
+          "explain": "salary DESC সাজিয়ে LIMIT 3 প্রথম 3টি (সবচেয়ে বেশি) row রাখে। top N-এ N বদলাও।"
+        },
+        {
+          "prompt": "EmployeeSalary থেকে 3rd highest salary বের করো (MySQL — LIMIT/OFFSET)।",
+          "accept": [
+            "SELECT Salary FROM EmployeeSalary ORDER BY Salary DESC LIMIT 1 OFFSET 2;",
+            "SELECT Salary FROM EmployeeSalary ORDER BY Salary DESC LIMIT 2, 1;",
+            "SELECT DISTINCT Salary FROM EmployeeSalary ORDER BY Salary DESC LIMIT 1 OFFSET 2;",
+            "SELECT DISTINCT Salary FROM EmployeeSalary ORDER BY Salary DESC LIMIT 2, 1;"
+          ],
+          "answers": [
+            "SELECT Salary FROM EmployeeSalary\nORDER BY Salary DESC\nLIMIT 1 OFFSET 2;",
+            "SELECT Salary FROM EmployeeSalary\nORDER BY Salary DESC\nLIMIT 2, 1;"
+          ],
+          "explain": "Nth highest = salary DESC সাজিয়ে প্রথম (N-1) টি skip করে পরের 1টি। 3rd highest → OFFSET 2 (= N-1), বা LIMIT 2, 1। Nth lowest চাইলে ORDER BY ASC।"
+        }
+      ]
+    },
+    {
+      "id": "a-dml",
+      "set": "A",
+      "name": "Update & Delete",
+      "info": {
+        "summary": [
+          "UPDATE দিয়ে existing row-এর value বদলানো হয়: UPDATE table SET col = value WHERE শর্ত।",
+          "DELETE দিয়ে শর্ত-মেলানো row মুছে ফেলা হয়: DELETE FROM table WHERE শর্ত।",
+          "WHERE না দিলে UPDATE/DELETE পুরো table-এর সব row-এ চলে — তাই WHERE খুব গুরুত্বপূর্ণ।"
+        ],
+        "table": {
+          "headers": ["Clause", "কাজ"],
+          "rows": [
+            ["UPDATE ... SET", "column-এর value বদলানো"],
+            ["SET col = col * 1.1", "বর্তমান value থেকে হিসাব"],
+            ["DELETE FROM", "row মুছে ফেলা"],
+            ["WHERE", "কোন row-এ চলবে তা ঠিক করা"]
+          ]
+        }
+      },
+      "commands": [
+        {"cmd": "UPDATE EmployeeSalary SET Salary = 20000 WHERE EmpId = 2", "desc": "এক row-এর salary বদলানো"},
+        {"cmd": "UPDATE EmployeeSalary SET Salary = Salary * 1.10", "desc": "সবার salary 10% বাড়ানো"},
+        {"cmd": "DELETE FROM EmployeeSalary WHERE EmpId = 5", "desc": "এক row মুছে ফেলা"}
+      ],
+      "practice": [
+        {
+          "prompt": "EmpId 2-এর salary 20000 করে দাও (update)।",
+          "accept": [
+            "UPDATE EmployeeSalary SET Salary = 20000 WHERE EmpId = 2;"
+          ],
+          "answers": ["UPDATE EmployeeSalary\nSET Salary = 20000\nWHERE EmpId = 2;"],
+          "explain": "UPDATE ... SET Salary = 20000 দিয়ে value বদলায়; WHERE EmpId = 2 দিয়ে শুধু ঐ একটি row-এ চলে।"
+        },
+        {
+          "prompt": "সব employee-র salary 10% বাড়িয়ে দাও।",
+          "accept": [
+            "UPDATE EmployeeSalary SET Salary = Salary * 1.10;",
+            "UPDATE EmployeeSalary SET Salary = Salary * 1.1;"
+          ],
+          "answers": ["UPDATE EmployeeSalary\nSET Salary = Salary * 1.10;"],
+          "explain": "Salary = Salary * 1.10 মানে বর্তমান salary-র 110% (10% বেশি)। WHERE নেই, তাই সব row-এ চলে।"
+        },
+        {
+          "prompt": "'P1' project-এর সব employee-কে 'P2' project-এ সরিয়ে দাও।",
+          "accept": [
+            "UPDATE EmployeeSalary SET Project = 'P2' WHERE Project = 'P1';"
+          ],
+          "answers": ["UPDATE EmployeeSalary\nSET Project = 'P2'\nWHERE Project = 'P1';"],
+          "explain": "WHERE Project = 'P1' শুধু P1-এর row বেছে নেয়, তারপর Project = 'P2' সেট করে।"
+        },
+        {
+          "prompt": "EmpId 5-এর salary record মুছে ফেলো (delete)।",
+          "accept": [
+            "DELETE FROM EmployeeSalary WHERE EmpId = 5;"
+          ],
+          "answers": ["DELETE FROM EmployeeSalary\nWHERE EmpId = 5;"],
+          "explain": "DELETE FROM ... WHERE EmpId = 5 দিয়ে শুধু ঐ একটি row মুছে ফেলা হয়।"
+        },
+        {
+          "prompt": "5000-এর কম salary-র সব record মুছে ফেলো।",
+          "accept": [
+            "DELETE FROM EmployeeSalary WHERE Salary < 5000;"
+          ],
+          "answers": ["DELETE FROM EmployeeSalary\nWHERE Salary < 5000;"],
+          "explain": "WHERE Salary < 5000 শর্ত-মেলানো row-গুলোকে বেছে নিয়ে মুছে ফেলে।"
+        }
+      ]
+    },
+    {
+      "id": "a-hospital",
+      "set": "A",
+      "name": "Hospital DB",
+      "sampleData": {
+        "Patient": {
+          "columns": ["patientNo", "patName", "patAddr", "DOB"],
+          "rows": [
+            [101, "John Smith", "Dhaka", "1990-04-12"],
+            [102, "Mary Jane", "Chittagong", "1985-11-03"],
+            [103, "Rahim Uddin", "Dhaka", "1978-02-20"],
+            [104, "Karim Ali", "Sylhet", "2000-07-30"]
+          ]
+        },
+        "Ward": {
+          "columns": ["wardNo", "wardName", "wardType", "noOfBeds"],
+          "rows": [
+            [1, "Ward A", "Surgical", 20],
+            [2, "Ward B", "Medical", 15],
+            [3, "Ward C", "Surgical", 10]
+          ]
+        },
+        "Contains": {
+          "columns": ["patientNo", "wardNo", "admissionDate"],
+          "rows": [
+            [101, 1, "2026-06-10"],
+            [102, 1, "2026-06-09"],
+            [103, 2, "2026-06-10"],
+            [104, 3, "2026-05-01"]
+          ]
+        },
+        "Drug": {
+          "columns": ["drugNo", "drugName", "costPerUnit"],
+          "rows": [
+            [1, "Napa", 2],
+            [2, "Seclo", 5],
+            [3, "Histacin", 1]
+          ]
+        },
+        "Prescribed": {
+          "columns": ["patientNo", "drugNo", "unitsPerDay", "startDate", "finishDate"],
+          "rows": [
+            [101, 1, 3, "2026-06-01", "2026-06-10"],
+            [101, 2, 1, "2026-06-01", "2026-06-05"],
+            [102, 1, 2, "2026-06-02", "2026-06-08"],
+            [103, 3, 1, "2026-06-03", "2026-06-07"]
+          ]
+        }
+      },
+      "info": {
+        "summary": [
+          "Hospital schema: Patient, Ward, Contains (কোন patient কোন ward-এ), Drug, Prescribed (কোন patient-কে কোন drug)।",
+          "Contains দিয়ে Patient ↔ Ward, আর Prescribed দিয়ে Patient ↔ Drug যুক্ত — বেশিরভাগ query এই bridge table-গুলো JOIN করে তৈরি।",
+          "তারিখ তুলনায় DATE(col) দিয়ে সময় বাদ দাও; ওষুধের খরচ = দিন (finishDate − startDate) × unit/day × cost/unit।"
+        ],
+        "table": {
+          "headers": ["Table", "Columns"],
+          "rows": [
+            ["Patient", "patientNo, patName, patAddr, DOB"],
+            ["Ward", "wardNo, wardName, wardType, noOfBeds"],
+            ["Contains", "patientNo, wardNo, admissionDate"],
+            ["Drug", "drugNo, drugName, costPerUnit"],
+            ["Prescribed", "patientNo, drugNo, unitsPerDay, startDate, finishDate"]
+          ]
+        }
+      },
+      "commands": [
+        {"cmd": "JOIN Contains c ON p.patientNo = c.patientNo", "desc": "patient ↔ ward bridge"},
+        {"cmd": "JOIN Ward w ON c.wardNo = w.wardNo", "desc": "ward মেলানো"},
+        {"cmd": "JOIN Prescribed pr ON p.patientNo = pr.patientNo", "desc": "patient ↔ drug bridge"},
+        {"cmd": "WHERE DATE(admissionDate) = CURDATE()", "desc": "আজকে admit হওয়া"},
+        {"cmd": "SUM(((finishDate - startDate) * unitsPerDay) * costPerUnit)", "desc": "মোট ওষুধ খরচ"}
+      ],
+      "practice": [
+        {
+          "prompt": "(a) সব patient-কে নাম (patName) অনুযায়ী sort করে দেখাও।",
+          "accept": [
+            "SELECT * FROM Patient ORDER BY patName;",
+            "SELECT patientNo, patName FROM Patient ORDER BY patName;",
+            "SELECT patientNo, patName, patAddr, DOB FROM Patient ORDER BY patName;"
+          ],
+          "explain": "ORDER BY patName নাম অনুযায়ী (ডিফল্ট ascending) সাজায়।"
+        },
+        {
+          "prompt": "(b) 'Surgical' ward-এ আছে এমন সব patient (patientNo, patName) দেখাও।",
+          "accept": [
+            "SELECT p.patientNo, p.patName FROM Patient p JOIN Contains c ON p.patientNo = c.patientNo JOIN Ward w ON c.wardNo = w.wardNo WHERE w.wardType = 'Surgical';"
+          ],
+          "answers": ["SELECT p.patientNo, p.patName\nFROM Patient p\nJOIN Contains c ON p.patientNo = c.patientNo\nJOIN Ward w ON c.wardNo = w.wardNo\nWHERE w.wardType = 'Surgical';"],
+          "explain": "Patient → Contains (কোন ward-এ) → Ward মিলিয়ে wardType = 'Surgical' দিয়ে filter।"
+        },
+        {
+          "prompt": "(c) আজকে (today) admit হওয়া সব patient (patientNo, patName) দেখাও।",
+          "accept": [
+            "SELECT p.patientNo, p.patName FROM Patient p, Contains c WHERE c.patientNo = p.patientNo AND DATE(c.admissionDate) = DATE(NOW());",
+            "SELECT p.patientNo, p.patName FROM Patient p, Contains c WHERE c.patientNo = p.patientNo AND DATE(admissionDate) = CURDATE();",
+            "SELECT p.patientNo, p.patName FROM Patient p JOIN Contains c ON c.patientNo = p.patientNo WHERE DATE(c.admissionDate) = CURDATE();"
+          ],
+          "answers": ["SELECT p.patientNo, p.patName\nFROM Patient p, Contains c\nWHERE c.patientNo = p.patientNo\n  AND DATE(c.admissionDate) = DATE(NOW());"],
+          "explain": "admissionDate-কে DATE() দিয়ে সময় বাদ দিয়ে আজকের তারিখ DATE(NOW()) বা CURDATE()-এর সাথে মেলানো হয়।"
+        },
+        {
+          "prompt": "(d) যাদের 'Napa' prescribe করা হয়েছে তাদের নাম (patName) বের করো।",
+          "accept": [
+            "SELECT p.patName FROM Patient p, Prescribed pr, Drug d WHERE pr.patientNo = p.patientNo AND pr.drugNo = d.drugNo AND d.drugName = 'Napa';",
+            "SELECT DISTINCT p.patName FROM Patient p, Prescribed pr, Drug d WHERE pr.patientNo = p.patientNo AND pr.drugNo = d.drugNo AND d.drugName = 'Napa';",
+            "SELECT p.patName FROM Patient p JOIN Prescribed pr ON pr.patientNo = p.patientNo JOIN Drug d ON pr.drugNo = d.drugNo WHERE d.drugName = 'Napa';"
+          ],
+          "answers": ["SELECT p.patName\nFROM Patient p, Prescribed pr, Drug d\nWHERE pr.patientNo = p.patientNo\n  AND pr.drugNo = d.drugNo\n  AND d.drugName = 'Napa';"],
+          "explain": "তিন table (Patient, Prescribed, Drug) মিলিয়ে drugName = 'Napa' দিয়ে filter করে patient-এর নাম।"
+        },
+        {
+          "prompt": "(e) 'John Smith' নামের patient-কে দেওয়া 'Napa'-র মোট খরচ (total cost) বের করো।",
+          "accept": [
+            "SELECT SUM(((finishDate - startDate) * unitsPerDay) * costPerUnit) FROM Patient p JOIN Prescribed pr ON p.patientNo = pr.patientNo JOIN Drug d ON pr.drugNo = d.drugNo WHERE p.patName = 'John Smith' AND d.drugName = 'Napa';",
+            "SELECT SUM(((finishDate - startDate) * unitsPerDay) * costPerUnit) FROM Patient p JOIN Prescribed pr ON p.patientNo = pr.patientNo JOIN Drug d ON pr.drugNo = d.drugNo WHERE p.patName = 'John' AND d.drugName = 'Napa';",
+            "SELECT SUM(((DATEDIFF(finishDate, startDate)) * unitsPerDay) * costPerUnit) FROM Patient p JOIN Prescribed pr ON p.patientNo = pr.patientNo JOIN Drug d ON pr.drugNo = d.drugNo WHERE p.patName = 'John Smith' AND d.drugName = 'Napa';"
+          ],
+          "answers": ["SELECT SUM(((finishDate - startDate) * unitsPerDay) * costPerUnit)\nFROM Patient p\nJOIN Prescribed pr ON p.patientNo = pr.patientNo\nJOIN Drug d ON pr.drugNo = d.drugNo\nWHERE p.patName = 'John Smith' AND d.drugName = 'Napa';"],
+          "explain": "প্রতি prescription-এ খরচ = দিন সংখ্যা (finishDate − startDate) × প্রতিদিন unit × প্রতি unit খরচ; SUM সব মিলিয়ে মোট। John Smith ও Napa দিয়ে filter।"
+        },
+        {
+          "prompt": "(f) একটি ward-এ bed সংখ্যার maximum, minimum ও average বের করো — ফল-column-এ সুন্দর heading দাও।",
+          "accept": [
+            "SELECT MAX(noOfBeds) AS Maximum, MIN(noOfBeds) AS Minimum, AVG(noOfBeds) AS Average FROM Ward;"
+          ],
+          "answers": ["SELECT MAX(noOfBeds) AS Maximum,\n       MIN(noOfBeds) AS Minimum,\n       AVG(noOfBeds) AS Average\nFROM Ward;"],
+          "explain": "MAX/MIN/AVG একসাথে ব্যবহার করা যায়; AS দিয়ে প্রতিটি ফল-column-কে heading (Maximum, Minimum, Average) দেওয়া হয়।"
+        },
+        {
+          "prompt": "(g) আজকে 10-এর বেশি patient admit করেছে এমন প্রতিটি ward-এর wardNo, wardType ও noOfBeds দেখাও।",
+          "accept": [
+            "SELECT w.wardNo, w.wardType, w.noOfBeds FROM Ward w JOIN Contains c ON w.wardNo = c.wardNo WHERE DATE(c.admissionDate) = CURDATE() GROUP BY w.wardNo, w.wardType, w.noOfBeds HAVING COUNT(*) > 10;",
+            "SELECT w.wardNo, wardType, noOfBeds FROM Ward w JOIN Contains c ON w.wardNo = c.wardNo WHERE DATE(c.admissionDate) = CURDATE() GROUP BY w.wardNo, w.wardType, w.noOfBeds HAVING COUNT(*) > 10;",
+            "SELECT w.wardNo, w.wardType, w.noOfBeds FROM Ward w JOIN Contains c ON w.wardNo = c.wardNo WHERE DATE(c.admissionDate) = DATE(NOW()) GROUP BY w.wardNo, w.wardType, w.noOfBeds HAVING COUNT(*) > 10;",
+            "SELECT w.wardNo, w.wardType, w.noOfBeds FROM Ward w JOIN Contains c ON w.wardNo = c.wardNo WHERE DATE(c.admissionDate) = CURDATE() GROUP BY w.wardNo, w.wardType, w.noOfBeds HAVING COUNT(c.patientNo) > 10;"
+          ],
+          "answers": ["SELECT w.wardNo, w.wardType, w.noOfBeds\nFROM Ward w\nJOIN Contains c ON w.wardNo = c.wardNo\nWHERE DATE(c.admissionDate) = CURDATE()\nGROUP BY w.wardNo, w.wardType, w.noOfBeds\nHAVING COUNT(*) > 10;"],
+          "explain": "আজকে admit হওয়া row ward অনুযায়ী GROUP করে; HAVING COUNT(*) > 10 দিয়ে শুধু 10-এর বেশি patient নেওয়া ward রাখা হয় (WHERE row-ভিত্তিক, HAVING দল-ভিত্তিক)।"
+        }
+      ]
+    },
+    {
+      "id": "schema",
+      "set": "B",
+      "name": "Schema (3 Tables)",
+      "info": {
+        "summary": [
+          "তিনটি table: employee (কর্মী), branch (শাখা), salary (বেতন)।",
+          "employee.branch_id → branch.branch_id এবং salary.employee_id → employee.employee_id (foreign key দিয়ে যুক্ত)।",
+          "প্রায় সব প্রশ্নই এই তিন table-কে JOIN করে তৈরি হয়, তাই column-গুলো মনে রাখো।"
+        ],
+        "table": {
+          "headers": [
+            "Table",
+            "Columns"
+          ],
+          "rows": [
+            [
+              "employee",
+              "employee_id, name, branch_id, gender, join_date, birthdate, city"
+            ],
+            [
+              "branch",
+              "branch_id, branch_name, location, manager"
+            ],
+            [
+              "salary",
+              "salary_id, employee_id, amount, date"
+            ]
+          ]
+        }
+      },
+      "commands": [
+        {
+          "cmd": "CREATE TABLE branch (\n  branch_id INT PRIMARY KEY AUTO_INCREMENT,\n  branch_name VARCHAR(100) NOT NULL,\n  location VARCHAR(100),\n  manager VARCHAR(100)\n);",
+          "desc": "branch table তৈরি"
+        },
+        {
+          "cmd": "CREATE TABLE employee (\n  employee_id INT PRIMARY KEY AUTO_INCREMENT,\n  name VARCHAR(100) NOT NULL,\n  branch_id INT,\n  gender ENUM('Male','Female') NOT NULL,\n  join_date DATE,\n  birthdate DATE,\n  city VARCHAR(100),\n  FOREIGN KEY (branch_id) REFERENCES branch(branch_id)\n);",
+          "desc": "employee table তৈরি (branch_id → branch)"
+        },
+        {
+          "cmd": "CREATE TABLE salary (\n  salary_id INT PRIMARY KEY AUTO_INCREMENT,\n  employee_id INT,\n  amount DECIMAL(10,2),\n  date DATE,\n  FOREIGN KEY (employee_id) REFERENCES employee(employee_id)\n);",
+          "desc": "salary table তৈরি (employee_id → employee)"
+        }
+      ],
+      "practice": [
+        {
+          "prompt": "branch table-এর সব column ও row দেখাও",
+          "accept": [
+            "SELECT * FROM branch;"
+          ],
+          "explain": "SELECT * = সব column; FROM branch = ঐ table থেকে"
+        },
+        {
+          "prompt": "employee table-এর সব row দেখাও",
+          "accept": [
+            "SELECT * FROM employee;"
+          ],
+          "explain": "* মানে সব column, কোনো শর্ত না দিলে সব row আসে"
+        }
+      ]
+    },
+    {
+      "id": "aggregation",
+      "set": "B",
+      "name": "Aggregation & Grouping",
+      "info": {
+        "summary": [
+          "GROUP BY দিয়ে row-গুলোকে দলে ভাগ করে প্রতি দলে aggregate (COUNT/SUM/AVG) বের করা হয়।",
+          "ORDER BY ... DESC + LIMIT 1 দিয়ে \"সবচেয়ে বেশি/কম\" বের করা যায়।",
+          "branch-ভিত্তিক হিসাব করতে তিন table (employee, branch, salary) JOIN করতে হয়।"
+        ],
+        "table": {
+          "headers": [
+            "Function / Clause",
+            "কাজ"
+          ],
+          "rows": [
+            [
+              "COUNT(*)",
+              "row সংখ্যা গণনা"
+            ],
+            [
+              "SUM(col)",
+              "যোগফল"
+            ],
+            [
+              "AVG(col)",
+              "গড়"
+            ],
+            [
+              "GROUP BY",
+              "একই মানের row একদলে"
+            ],
+            [
+              "ORDER BY ... DESC",
+              "বড় থেকে ছোট সাজানো"
+            ],
+            [
+              "LIMIT n",
+              "প্রথম n টি row"
+            ]
+          ]
+        }
+      },
+      "commands": [
+        {
+          "cmd": "COUNT(*)",
+          "desc": "কতগুলো row আছে"
+        },
+        {
+          "cmd": "GROUP BY gender",
+          "desc": "gender অনুযায়ী দল করা"
+        },
+        {
+          "cmd": "SUM(s.amount)",
+          "desc": "মোট বেতন"
+        },
+        {
+          "cmd": "AVG(s.amount)",
+          "desc": "গড় বেতন"
+        },
+        {
+          "cmd": "ORDER BY total DESC LIMIT 1",
+          "desc": "সর্বোচ্চ একটি বের করা"
+        }
+      ],
+      "practice": [
+        {
+          "prompt": "পুরুষ ও নারী কর্মীর সংখ্যা বের করো (gender অনুযায়ী count)",
+          "accept": [
+            "SELECT gender, COUNT(*) AS count\nFROM employee\nGROUP BY gender;"
+          ],
+          "explain": "GROUP BY gender → প্রতিটি gender-এর জন্য COUNT(*) গণনা করে"
+        },
+        {
+          "prompt": "প্রতিটি branch-এর মোট বেতন খরচ (total salary expenditure) বের করো",
+          "accept": [
+            "SELECT b.branch_name, SUM(s.amount) AS total_expenditure\nFROM employee e\nJOIN branch b ON e.branch_id = b.branch_id\nJOIN salary s ON e.employee_id = s.employee_id\nGROUP BY b.branch_name;"
+          ],
+          "explain": "তিন table JOIN করে branch অনুযায়ী SUM(amount)"
+        },
+        {
+          "prompt": "প্রতিটি branch-এর গড় বেতন (average salary) বের করো",
+          "accept": [
+            "SELECT b.branch_name, AVG(s.amount) AS avg_salary\nFROM employee e\nJOIN branch b ON e.branch_id = b.branch_id\nJOIN salary s ON e.employee_id = s.employee_id\nGROUP BY b.branch_name;"
+          ],
+          "explain": "SUM-এর জায়গায় AVG ব্যবহার করলেই গড়"
+        },
+        {
+          "prompt": "সবচেয়ে বেশি কর্মী আছে এমন branch বের করো",
+          "accept": [
+            "SELECT b.branch_name, COUNT(e.employee_id) AS total_employees\nFROM branch b\nJOIN employee e ON e.branch_id = b.branch_id\nGROUP BY b.branch_name\nORDER BY total_employees DESC\nLIMIT 1;"
+          ],
+          "explain": "branch অনুযায়ী employee গুনে ORDER BY DESC LIMIT 1 দিয়ে শীর্ষ একটি"
+        },
+        {
+          "prompt": "সবচেয়ে বেশি মোট বেতন খরচ হয় এমন branch বের করো",
+          "accept": [
+            "SELECT b.branch_name, SUM(s.amount) AS total_expenditure\nFROM employee e\nJOIN branch b ON e.branch_id = b.branch_id\nJOIN salary s ON e.employee_id = s.employee_id\nGROUP BY b.branch_name\nORDER BY total_expenditure DESC\nLIMIT 1;"
+          ],
+          "explain": "মোট খরচের query-তে ORDER BY DESC LIMIT 1 যোগ করলেই শীর্ষ branch"
+        }
+      ]
+    },
+    {
+      "id": "joins",
+      "set": "B",
+      "name": "Joins",
+      "info": {
+        "summary": [
+          "JOIN দিয়ে দুই table-এর মিল-করা row একসাথে আনা হয় (foreign key দিয়ে শর্ত মেলানো)।",
+          "INNER JOIN = দুই পাশেই মিল থাকলে; LEFT JOIN = বাঁ table-এর সব row, ডান পাশে না মিললে NULL।",
+          "DISTINCT দিয়ে ডুপ্লিকেট বাদ, WHERE দিয়ে শর্তে filter।"
+        ],
+        "table": {
+          "headers": [
+            "Clause",
+            "কাজ"
+          ],
+          "rows": [
+            [
+              "JOIN ... ON",
+              "দুই table মেলানো (inner)"
+            ],
+            [
+              "LEFT JOIN",
+              "বাঁ table-এর সব row রাখে"
+            ],
+            [
+              "IS NULL",
+              "মিল নেই এমন row ধরা"
+            ],
+            [
+              "DISTINCT",
+              "ডুপ্লিকেট বাদ"
+            ],
+            [
+              "WHERE",
+              "শর্ত দিয়ে filter"
+            ]
+          ]
+        }
+      },
+      "commands": [
+        {
+          "cmd": "JOIN branch b ON e.branch_id = b.branch_id",
+          "desc": "employee ↔ branch মেলানো"
+        },
+        {
+          "cmd": "JOIN salary s ON e.employee_id = s.employee_id",
+          "desc": "employee ↔ salary মেলানো"
+        },
+        {
+          "cmd": "LEFT JOIN salary s ON e.employee_id = s.employee_id",
+          "desc": "salary না থাকলেও employee থাকে"
+        },
+        {
+          "cmd": "WHERE s.amount > 60000",
+          "desc": "শর্ত দিয়ে filter"
+        }
+      ],
+      "practice": [
+        {
+          "prompt": "প্রতিটি কর্মীর নাম ও তার branch-এর নাম দেখাও",
+          "accept": [
+            "SELECT e.name, b.branch_name\nFROM employee e\nJOIN branch b ON e.branch_id = b.branch_id;"
+          ],
+          "explain": "branch_id দিয়ে employee ও branch table JOIN"
+        },
+        {
+          "prompt": "60000-এর বেশি বেতন পায় এমন কর্মীদের নাম ও বেতন দেখাও",
+          "accept": [
+            "SELECT DISTINCT e.name, s.amount\nFROM employee e\nJOIN salary s ON e.employee_id = s.employee_id\nWHERE s.amount > 60000;"
+          ],
+          "explain": "salary JOIN + WHERE amount > 60000; DISTINCT দিয়ে পুনরাবৃত্তি বাদ"
+        },
+        {
+          "prompt": "সবচেয়ে বেশি বেতন পাওয়া কর্মী বের করো",
+          "accept": [
+            "SELECT e.name, s.amount\nFROM employee e\nJOIN salary s ON e.employee_id = s.employee_id\nORDER BY s.amount DESC\nLIMIT 1;"
+          ],
+          "explain": "amount অনুযায়ী DESC সাজিয়ে প্রথম row"
+        },
+        {
+          "prompt": "যেসব কর্মীর কোনো salary record নেই তাদের দেখাও",
+          "accept": [
+            "SELECT e.name\nFROM employee e\nLEFT JOIN salary s ON e.employee_id = s.employee_id\nWHERE s.salary_id IS NULL;"
+          ],
+          "explain": "LEFT JOIN রাখে সব employee; salary না থাকলে s.salary_id NULL হয়"
+        }
+      ]
+    },
+    {
+      "id": "dates",
+      "set": "B",
+      "name": "Date Functions",
+      "info": {
+        "summary": [
+          "MONTH(), YEAR(), CURDATE()/CURRENT_DATE দিয়ে তারিখ থেকে অংশ বের করে তুলনা করা হয়।",
+          "INTERVAL দিয়ে তারিখ যোগ/বিয়োগ করা যায় (যেমন গত মাস = CURRENT_DATE - INTERVAL 1 MONTH)।",
+          "\"গত মাস\" মেলাতে মাস ও সাল দুটোই মেলানো নিরাপদ (year boundary-র জন্য)।"
+        ],
+        "table": {
+          "headers": [
+            "Function",
+            "কাজ"
+          ],
+          "rows": [
+            [
+              "YEAR(date)",
+              "তারিখ থেকে সাল বের করে"
+            ],
+            [
+              "MONTH(date)",
+              "তারিখ থেকে মাস বের করে"
+            ],
+            [
+              "CURDATE() / CURRENT_DATE",
+              "আজকের তারিখ"
+            ],
+            [
+              "- INTERVAL 1 MONTH",
+              "এক মাস আগে"
+            ]
+          ]
+        }
+      },
+      "commands": [
+        {
+          "cmd": "YEAR(join_date) = YEAR(CURDATE())",
+          "desc": "চলতি বছরে join"
+        },
+        {
+          "cmd": "MONTH(s.date) = MONTH(CURRENT_DATE - INTERVAL 1 MONTH)",
+          "desc": "গত মাস"
+        },
+        {
+          "cmd": "YEAR(s.date) = YEAR(CURRENT_DATE - INTERVAL 1 MONTH)",
+          "desc": "গত মাসের সাল"
+        }
+      ],
+      "practice": [
+        {
+          "prompt": "গত মাসে যারা বেতন পেয়েছে তাদের নাম দেখাও",
+          "accept": [
+            "SELECT DISTINCT e.name\nFROM employee e\nJOIN salary s ON e.employee_id = s.employee_id\nWHERE MONTH(s.date) = MONTH(CURRENT_DATE - INTERVAL 1 MONTH)\n  AND YEAR(s.date) = YEAR(CURRENT_DATE - INTERVAL 1 MONTH);"
+          ],
+          "explain": "salary.date-এর মাস ও সাল দুটোই গত মাসের সাথে মেলানো"
+        },
+        {
+          "prompt": "এই বছর যারা join করেছে তাদের নাম দেখাও",
+          "accept": [
+            "SELECT name\nFROM employee\nWHERE YEAR(join_date) = YEAR(CURDATE());"
+          ],
+          "explain": "join_date-এর সাল = চলতি সাল (YEAR(CURDATE()))"
+        }
+      ]
+    },
+    {
+      "id": "subqueries",
+      "set": "B",
+      "name": "Subqueries & Derived Tables",
+      "info": {
+        "summary": [
+          "Subquery = query-র ভেতরে আরেকটি query; derived table = FROM-এর ভেতরে subquery-কে অস্থায়ী table হিসেবে ব্যবহার।",
+          "HAVING = GROUP BY-এর পর দলের উপর শর্ত (WHERE row-এর উপর, HAVING দলের উপর)।",
+          "\"branch-এর গড়ের চেয়ে বেশি\" টাইপ প্রশ্নে প্রতি branch-এর হিসাব derived table-এ বের করে মূল table-এর সাথে মেলানো হয়।"
+        ],
+        "table": {
+          "headers": [
+            "Tool",
+            "কাজ"
+          ],
+          "rows": [
+            [
+              "Subquery in IN()",
+              "ভেতরের query-র ফল দিয়ে filter"
+            ],
+            [
+              "HAVING COUNT(*) > 1",
+              "দল-ভিত্তিক শর্ত"
+            ],
+            [
+              "Derived table FROM (...) t",
+              "subquery-কে table বানানো"
+            ],
+            [
+              "MAX(birthdate)",
+              "সবচেয়ে নতুন জন্ম = কম বয়স"
+            ]
+          ]
+        }
+      },
+      "commands": [
+        {
+          "cmd": "... IN (SELECT amount FROM salary GROUP BY amount HAVING COUNT(*) > 1)",
+          "desc": "একাধিকবার আসা বেতন"
+        },
+        {
+          "cmd": "JOIN (SELECT branch_id, MAX(birthdate) ... GROUP BY branch_id) AS t",
+          "desc": "প্রতি branch-এ youngest (derived table)"
+        },
+        {
+          "cmd": "WHERE s.amount > ba.avg_salary",
+          "desc": "branch গড়ের সাথে তুলনা"
+        }
+      ],
+      "practice": [
+        {
+          "prompt": "একই বেতন পায় এমন (duplicate salary) কর্মীদের দেখাও",
+          "accept": [
+            "SELECT e.name, s.amount\nFROM employee e\nJOIN salary s ON e.employee_id = s.employee_id\nWHERE s.amount IN (\n  SELECT amount\n  FROM salary\n  GROUP BY amount\n  HAVING COUNT(*) > 1\n);"
+          ],
+          "explain": "ভেতরের query একাধিকবার আসা amount বের করে; বাইরে সেগুলোতে filter"
+        },
+        {
+          "prompt": "প্রতিটি branch-এর সবচেয়ে কম বয়সী (youngest) কর্মী বের করো",
+          "accept": [
+            "SELECT b.branch_name, e.name, e.birthdate\nFROM employee e\nJOIN branch b ON e.branch_id = b.branch_id\nJOIN (\n  SELECT branch_id, MAX(birthdate) AS youngest_birthdate\n  FROM employee\n  GROUP BY branch_id\n) AS t ON e.branch_id = t.branch_id\n     AND e.birthdate = t.youngest_birthdate;"
+          ],
+          "explain": "derived table প্রতি branch-এ MAX(birthdate) (নতুন জন্ম = কম বয়স) বের করে, তারপর মূল table-এর সাথে মেলানো"
+        },
+        {
+          "prompt": "নিজ branch-এর গড় বেতনের চেয়ে বেশি পায় এমন কর্মীদের দেখাও",
+          "accept": [
+            "SELECT e.name, s.amount, b.branch_name\nFROM employee e\nJOIN salary s ON e.employee_id = s.employee_id\nJOIN branch b ON e.branch_id = b.branch_id\nJOIN (\n  SELECT e.branch_id, AVG(s.amount) AS avg_salary\n  FROM employee e\n  JOIN salary s ON e.employee_id = s.employee_id\n  GROUP BY e.branch_id\n) AS ba ON e.branch_id = ba.branch_id\nWHERE s.amount > ba.avg_salary;"
+          ],
+          "explain": "derived table প্রতি branch-এর গড় বের করে; বাইরে amount > সেই গড় শর্ত"
+        }
+      ]
+    }
+  ]
+}

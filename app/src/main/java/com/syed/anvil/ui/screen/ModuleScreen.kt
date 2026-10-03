@@ -47,10 +47,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.syed.anvil.AnvilApp
 import com.syed.anvil.backend.ModuleId
 import com.syed.anvil.content.ContentState
 import com.syed.anvil.content.Item
@@ -79,6 +81,8 @@ class ModuleNav(
     val onSaved: (kind: PoolSet, group: String) -> Unit,
     val onSearchHit: (Item) -> Unit,
     val onWritten: () -> Unit,
+    val onPractice: (String) -> Unit,
+    val onPracticeImportant: () -> Unit,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -152,11 +156,16 @@ private fun EmptyState(online: Boolean, onDownload: () -> Unit) {
 }
 
 private const val SEARCH_PAGE = 8
+private const val PRACTICE = "practice"
 
 @Composable
 private fun ModuleBody(id: ModuleId, content: ModuleContent, flags: Map<String, Flag>, nav: ModuleNav) {
     val p = LocalPalette.current
     var selected by rememberSaveable { mutableStateOf(content.groups.firstOrNull()?.key) }
+    // ICT has one more section that is not in the database: the bundled Linux and SQL drills.
+    val inPractice = id == ModuleId.ICT && selected == PRACTICE
+    val app = LocalContext.current.applicationContext as AnvilApp
+    val practiceFlags = remember(flags) { flags.filter { it.key.startsWith("practice__") } }
     val group = content.groups.firstOrNull { it.key == selected } ?: content.groups.firstOrNull() ?: return
     val groupItems = remember(content, group) { group.topics.flatMap { content.items(group.key, it.slug) }.filter { it.isQuizzable || LongForm.isLongForm(it) } }
     val counts = remember(groupItems, flags) { QuizPool.counts(groupItems, flags, includeLongForm = true) }
@@ -178,7 +187,14 @@ private fun ModuleBody(id: ModuleId, content: ModuleContent, flags: Map<String, 
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
     LazyColumn(state = list, contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item {
+        if (inPractice) item {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                val saved = practiceFlags.values.count { it.important }
+                val weak = practiceFlags.values.count { it.important && it.weak }
+                Action(Icons.Filled.Bookmark, "Important", saved, p.imp, Modifier.weight(1f)) { nav.onPracticeImportant() }
+                Column(Modifier.weight(1f).padding(14.dp)) { Text("$weak weak", style = MaterialTheme.typography.labelLarge, color = p.warn) }
+            }
+        } else item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 // Exams draw multiple-choice questions only; Written/Extra/Viva have none.
                 if (!LongForm.isLongForm(group.key)) Action(Icons.Filled.Timer, "Exam", null, MaterialTheme.colorScheme.primary, Modifier.weight(1f)) { nav.onExam(group.key) }
@@ -201,17 +217,33 @@ private fun ModuleBody(id: ModuleId, content: ModuleContent, flags: Map<String, 
         item {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(content.groups, key = { it.key }) { g ->
-                    FilterChip(selected = g.key == group.key, onClick = { selected = g.key; query = ""; debounced = "" }, label = { Text("${g.title} · ${g.count}") })
+                    FilterChip(selected = !inPractice && g.key == group.key, onClick = { selected = g.key; query = ""; debounced = "" }, label = { Text("${g.title} · ${g.count}") })
+                }
+                if (id == ModuleId.ICT) item(key = PRACTICE) {
+                    FilterChip(selected = inPractice, onClick = { selected = PRACTICE; query = ""; debounced = "" },
+                        label = { Text("Practice · ${app.practice.sumOf { c -> c.topics.sumOf { t -> t.practice.size } }}") })
                 }
             }
         }
-        item {
+        if (!inPractice) item {
             OutlinedTextField(
                 query, { query = it }, Modifier.fillMaxWidth(), singleLine = true,
                 leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text("Search ${group.title}") },
             )
         }
-        if (tokens.isNotEmpty()) {
+        if (inPractice) {
+            items(app.practice, key = { it.id }) { c ->
+                Row(
+                    Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).background(p.surface).clickable { nav.onPractice(c.id) }.padding(horizontal = 18.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("${c.name} Practice", style = MaterialTheme.typography.titleMedium)
+                        Text("${c.topics.size} topics · ${c.topics.sumOf { t -> t.practice.size }} drills", style = MaterialTheme.typography.labelMedium, color = p.text3)
+                    }
+                }
+            }
+        } else if (tokens.isNotEmpty()) {
             item { Text("${hits.size} results", style = MaterialTheme.typography.labelMedium, color = p.text3) }
             val pages = maxOf(1, (hits.size + SEARCH_PAGE - 1) / SEARCH_PAGE)
             items(hits.drop(page.coerceAtMost(pages - 1) * SEARCH_PAGE).take(SEARCH_PAGE), key = { it.id }) { hit ->
