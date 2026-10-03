@@ -18,8 +18,8 @@ android {
         applicationId = "com.syed.anvil"
         minSdk = 31
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.1"
         // Web client IDs of the Google OAuth clients behind each Supabase project.
         // Empty until set in local.properties; sign-in is simply disabled then.
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID_GENERAL", "\"${localProps.getProperty("GOOGLE_WEB_CLIENT_ID_GENERAL", "")}\"")
