@@ -16,9 +16,9 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun Pager(page: Int, pages: Int, onPage: (Int) -> Unit) {
     if (pages <= 1) return
-    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+    HandMirror { Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         OutlinedButton(onClick = { onPage(page - 1) }, enabled = page > 0) { Text("Previous") }
         Text("${page + 1} / $pages", style = MaterialTheme.typography.labelLarge)
         OutlinedButton(onClick = { onPage(page + 1) }, enabled = page < pages - 1) { Text("Next") }
-    }
+    } }
 }

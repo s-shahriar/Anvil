@@ -6,6 +6,7 @@ import com.syed.anvil.backend.Postgrest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -47,17 +48,35 @@ class ContentRepository(
     private val _sync = MutableStateFlow<SyncState>(SyncState.Idle)
     val sync: StateFlow<SyncState> = _sync
 
+    /** The complete content; [state] shows it minus the questions in the recycle bin. */
+    private var full: ModuleContent? = null
+    private var hiddenIds: Set<String> = emptySet()
+
+    private fun publish() {
+        val f = full ?: return
+        _state.value = ContentState.Ready(if (hiddenIds.isEmpty()) f else f.without(hiddenIds))
+    }
+
+    /** Follows the recycle bin: questions with these ids disappear from every list at once. */
+    fun bindHidden(scope: kotlinx.coroutines.CoroutineScope, ids: StateFlow<Set<String>>) {
+        scope.launch { ids.collect { hiddenIds = it; withContext(Dispatchers.Default) { publish() } } }
+    }
+
+    /** Questions hidden locally, for the recycle bin screen. */
+    fun hiddenItems(): List<Item> = full?.allItems()?.filter { it.id in hiddenIds }?.toList().orEmpty()
+
     val cacheBytes: Long get() = if (file.exists()) file.length() else 0L
     val cachedAt: Long get() = if (file.exists()) file.lastModified() else 0L
 
     /** Reads the offline copy, if there is one. Never touches the network. */
     suspend fun load() = mutex.withLock {
         if (_state.value is ContentState.Ready) return@withLock
-        _state.value = withContext(Dispatchers.IO) {
-            runCatching { if (file.exists()) ContentState.Ready(readCache()) else ContentState.Empty }
-                // A corrupt cache is treated as no cache; the next download rewrites it.
-                .getOrElse { file.delete(); ContentState.Empty }
+        val loaded = withContext(Dispatchers.IO) {
+            // A corrupt cache is treated as no cache; the next download rewrites it.
+            runCatching { if (file.exists()) readCache() else null }.getOrElse { file.delete(); null }
         }
+        full = loaded
+        if (loaded != null) publish() else _state.value = ContentState.Empty
     }
 
     /** Downloads the module and swaps it in. A failure keeps whatever was cached before. */
@@ -66,7 +85,7 @@ class ContentRepository(
         try {
             val fresh = download()
             withContext(Dispatchers.IO) { writeCache(fresh) }
-            _state.value = ContentState.Ready(fresh)
+            full = fresh; publish()
             _sync.value = SyncState.Idle
             onRefreshed(fresh)
         } catch (e: Exception) {
@@ -76,6 +95,7 @@ class ContentRepository(
 
     suspend fun clear() = mutex.withLock {
         withContext(Dispatchers.IO) { file.delete() }
+        full = null
         _state.value = ContentState.Empty
         _sync.value = SyncState.Idle
     }

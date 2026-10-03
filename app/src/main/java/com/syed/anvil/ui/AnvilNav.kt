@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
@@ -16,9 +17,13 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.syed.anvil.backend.ModuleId
 import com.syed.anvil.content.LongForm
+import com.syed.anvil.ui.component.LocalLeftHand
+import com.syed.anvil.ui.highlight.HighlightHost
+import com.syed.anvil.ui.component.LocalTrash
 import com.syed.anvil.content.PoolSet
 import com.syed.anvil.ui.screen.ExamConfigScreen
 import com.syed.anvil.ui.screen.ExamRunScreen
+import com.syed.anvil.ui.screen.BinScreen
 import com.syed.anvil.ui.screen.EquationScreen
 import com.syed.anvil.ui.screen.FinancialTermsScreen
 import com.syed.anvil.ui.screen.HomeScreen
@@ -52,10 +57,16 @@ fun AnvilNav(vm: AnvilViewModel, dark: Boolean, activity: Activity) {
     val nav = rememberNavController()
 
     @Composable
-    fun Themed(scope: Scope, content: @Composable () -> Unit) = AnvilTheme(scope, dark) {
-        Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize(), content = content)
+    fun Themed(scope: Scope, module: ModuleId? = null, content: @Composable () -> Unit) = AnvilTheme(scope, dark) {
+        // Inside a module, cards get a delete button wired to that module's recycle bin.
+        CompositionLocalProvider(LocalTrash provides module?.let { vm.module(it).trash }) {
+            val page = @Composable { Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize(), content = content) }
+            // Inside a module, text can be highlighted: the host provides the colour bar.
+            if (module != null) HighlightHost(vm.module(module).highlights, page) else page()
+        }
     }
 
+    CompositionLocalProvider(LocalLeftHand provides vm.leftHand) {
     NavHost(nav, startDestination = "home") {
         composable("home") {
             Themed(Scope.SHELL) {
@@ -67,7 +78,7 @@ fun AnvilNav(vm: AnvilViewModel, dark: Boolean, activity: Activity) {
         }
         composable("module/{m}") { e ->
             val id = e.module()
-            Themed(id.scope()) {
+            Themed(id.scope(), id) {
                 ModuleScreen(
                     vm, id,
                     ModuleNav(
@@ -76,6 +87,7 @@ fun AnvilNav(vm: AnvilViewModel, dark: Boolean, activity: Activity) {
                         onExam = { g -> nav.navigate("exam/${id.key}?group=$g") },
                         onSaved = { kind, g -> nav.navigate("saved/${id.key}/${kind.key}/$g") },
                         onWritten = { nav.navigate("written/${id.key}") },
+                        onBin = { nav.navigate("bin/${id.key}") },
                         onPractice = { cat -> nav.navigate("practice/$cat") },
                         onPracticeImportant = { nav.navigate("practiceimp") },
                         onMath = { nav.navigate("math") },
@@ -91,7 +103,7 @@ fun AnvilNav(vm: AnvilViewModel, dark: Boolean, activity: Activity) {
         }
         composable("topic/{m}/{g}/{t}") { e ->
             val id = e.module(); val g = e.arg("g"); val t = e.arg("t")
-            Themed(id.scope()) {
+            Themed(id.scope(), id) {
                 ModeSelectScreen(
                     vm, id, g, t, onBack = { nav.popBackStack() },
                     onQuiz = { set -> nav.navigate("quiz/${id.key}/$g/$t?set=${set.key}") },
@@ -101,13 +113,13 @@ fun AnvilNav(vm: AnvilViewModel, dark: Boolean, activity: Activity) {
         }
         composable("quiz/{m}/{g}/{t}?set={set}", listOf(navArgument("set") { type = NavType.StringType; defaultValue = "all" })) { e ->
             val id = e.module()
-            Themed(id.scope()) {
+            Themed(id.scope(), id) {
                 QuizScreen(vm, id, e.arg("g"), e.arg("t"), PoolSet.of(e.arguments!!.getString("set")), onBack = { nav.popBackStack() }, onHome = { nav.toModuleHome(id) })
             }
         }
         composable("study/{m}/{g}/{t}?focus={focus}", listOf(navArgument("focus") { type = NavType.StringType; nullable = true; defaultValue = null })) { e ->
             val id = e.module()
-            Themed(id.scope()) {
+            Themed(id.scope(), id) {
                 StudyScreen(vm, id, e.arg("g"), e.arg("t"), e.arguments!!.getString("focus")?.ifEmpty { null }, onBack = { nav.popBackStack() })
             }
         }
@@ -120,7 +132,7 @@ fun AnvilNav(vm: AnvilViewModel, dark: Boolean, activity: Activity) {
         ) { e ->
             val id = e.module(); val g = e.arg("g"); val t = e.arg("t")
             val focus = e.arguments!!.getString("focus")?.ifEmpty { null }
-            Themed(id.scope()) {
+            Themed(id.scope(), id) {
                 ReaderScreen(
                     vm, id, g, t, e.arguments!!.getString("segment"), focus,
                     onBack = { nav.popBackStack() },
@@ -133,6 +145,7 @@ fun AnvilNav(vm: AnvilViewModel, dark: Boolean, activity: Activity) {
                 )
             }
         }
+        composable("bin/{m}") { e -> val id = e.module(); Themed(id.scope(), id) { BinScreen(vm, id, onBack = { nav.popBackStack() }) } }
         composable("math") { Themed(Scope.GENERAL) { MathFormulasScreen(vm, onBack = { nav.popBackStack() }) } }
         composable("finance") { Themed(Scope.GENERAL) { FinancialTermsScreen(onBack = { nav.popBackStack() }) } }
         composable("equation/{t}") { e -> Themed(Scope.ICT) { EquationScreen(vm, e.arg("t"), onBack = { nav.popBackStack() }) } }
@@ -147,17 +160,18 @@ fun AnvilNav(vm: AnvilViewModel, dark: Boolean, activity: Activity) {
         }
         composable("exam/{m}?group={group}", listOf(navArgument("group") { type = NavType.StringType; nullable = true; defaultValue = null })) { e ->
             val id = e.module()
-            Themed(id.scope()) {
+            Themed(id.scope(), id) {
                 ExamConfigScreen(vm, id, e.arguments!!.getString("group"), onBack = { nav.popBackStack() }, onStart = { nav.navigate("examrun/${id.key}") })
             }
         }
         composable("examrun/{m}") { e ->
             val id = e.module()
-            Themed(id.scope()) { ExamRunScreen(vm, onBack = { nav.popBackStack() }, onHome = { nav.toModuleHome(id) }) }
+            Themed(id.scope(), id) { ExamRunScreen(vm, onBack = { nav.popBackStack() }, onHome = { nav.toModuleHome(id) }) }
         }
         composable("saved/{m}/{kind}/{g}") { e ->
             val id = e.module()
-            Themed(id.scope()) { SavedScreen(vm, id, PoolSet.of(e.arg("kind")), e.arg("g"), onBack = { nav.popBackStack() }) }
+            Themed(id.scope(), id) { SavedScreen(vm, id, PoolSet.of(e.arg("kind")), e.arg("g"), onBack = { nav.popBackStack() }) }
         }
+    }
     }
 }

@@ -47,6 +47,11 @@ class AnvilViewModel(private val app: Application) : AndroidViewModel(app) {
     var themeMode by mutableStateOf(runCatching { ThemeMode.valueOf(prefs.getString("theme", "SYSTEM")!!) }.getOrDefault(ThemeMode.SYSTEM))
         private set
 
+    var leftHand by mutableStateOf(prefs.getBoolean("leftHand", false))
+        private set
+
+    fun chooseLeftHand(v: Boolean) { leftHand = v; prefs.edit().putBoolean("leftHand", v).apply() }
+
     fun boolPref(key: String) = prefs.getBoolean(key, false)
     fun setBoolPref(key: String, v: Boolean) = prefs.edit().putBoolean(key, v).apply()
 
@@ -83,7 +88,7 @@ class AnvilViewModel(private val app: Application) : AndroidViewModel(app) {
         }
         // A download that was cut short (app closed, connection lost) is topped up here.
         if (online.value) (m.content.state.value as? ContentState.Ready)?.let { m.prefetchImages(it.content) }
-        if (m.auth.session.value != null) runCatching { m.progress.pull() }
+        if (m.auth.session.value != null) { runCatching { m.progress.pull() }; runCatching { m.highlights.pull() } }
     }
 
     val imagesSaved get() = anvil.images.cachedCount
@@ -103,7 +108,8 @@ class AnvilViewModel(private val app: Application) : AndroidViewModel(app) {
             val t = GoogleSignIn.requestToken(activity, m.config.googleWebClientId)
             m.auth.signInWithGoogle(t.idToken, t.rawNonce)
             m.progress.kick() // edits made while signed out go up now
-            m.progress.pull()
+            m.highlights.kick(); m.trash.kick()
+            m.progress.pull(); m.highlights.pull()
         }.onFailure { authError = "${id.title}: ${it.message ?: "Sign-in failed"}" }
     }
 

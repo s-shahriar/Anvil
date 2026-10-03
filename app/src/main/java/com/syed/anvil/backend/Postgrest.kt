@@ -52,6 +52,32 @@ class Postgrest(private val config: BackendConfig, private val auth: SupabaseAut
         }
     }
 
+    /** Calls a database function (`/rest/v1/rpc/<name>`); returns the response body. Throws [HttpException] on failure. */
+    suspend fun rpc(name: String, body: org.json.JSONObject): String = withContext(Dispatchers.IO) {
+        check(Http.request("POST", "${config.url}/rest/v1/rpc/$name", headers(), body.toString())).body
+    }
+
+    /** PATCH rows matching [filter] (e.g. `id=in.(a,b)`). */
+    suspend fun patch(table: String, filter: String, body: org.json.JSONObject) {
+        withContext(Dispatchers.IO) {
+            check(Http.request("PATCH", "${config.url}/rest/v1/$table?$filter", headers(mapOf("Prefer" to "return=minimal")), body.toString()))
+        }
+    }
+
+    /** DELETE rows matching [filter]. */
+    suspend fun delete(table: String, filter: String) {
+        withContext(Dispatchers.IO) {
+            check(Http.request("DELETE", "${config.url}/rest/v1/$table?$filter", headers(mapOf("Prefer" to "return=minimal"))))
+        }
+    }
+
+    /** Insert rows and return nothing. Rows may carry their own `id`. */
+    suspend fun insert(table: String, rows: JSONArray) {
+        withContext(Dispatchers.IO) {
+            check(Http.request("POST", "${config.url}/rest/v1/$table", headers(mapOf("Prefer" to "return=minimal")), rows.toString()))
+        }
+    }
+
     /** Row count for a filter, from the Content-Range header. */
     suspend fun count(table: String, filter: String): Int = withContext(Dispatchers.IO) {
         val r = check(

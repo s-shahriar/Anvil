@@ -42,7 +42,7 @@ import androidx.compose.ui.unit.sp
 import com.syed.anvil.AnvilApp
 import com.syed.anvil.ui.theme.LocalPalette
 
-private fun annotate(p: Block.Paragraph): AnnotatedString = buildAnnotatedString {
+internal fun annotate(p: Block.Paragraph): AnnotatedString = buildAnnotatedString {
     for (r in p.runs) {
         val deco = buildList {
             if (r.underline) add(TextDecoration.Underline)
@@ -82,18 +82,20 @@ fun RichText(
 }
 
 /**
- * ICT multiple-choice questions are plain text: the first line is the prompt and any further lines are code,
- * which keeps its indentation in a horizontally scrollable monospace block.
+ * ICT multiple-choice questions are plain text: the first line is the prompt (block `q`) and any further lines are code
+ * (block `q.code`), which keeps its indentation in a horizontally scrollable monospace block.
  */
 @Composable
-fun PlainQuestionText(text: String, modifier: Modifier = Modifier, style: TextStyle = MaterialTheme.typography.bodyLarge) {
+fun PlainQuestionText(text: String, modifier: Modifier = Modifier, style: TextStyle = MaterialTheme.typography.bodyLarge, uid: String? = null) {
     val nl = text.indexOf('\n')
+    val prompt = if (nl < 0) text else text.substring(0, nl).trim()
+    val code = if (nl < 0) "" else text.substring(nl + 1).trimEnd()
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(if (nl < 0) text else text.substring(0, nl), style = style)
-        if (nl >= 0) {
+        com.syed.anvil.ui.highlight.HText(uid, "q", prompt, style = style)
+        if (code.isNotEmpty()) {
             val p = LocalPalette.current
             Box(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(p.elevated).horizontalScroll(rememberScrollState()).padding(12.dp)) {
-                Text(text.substring(nl + 1).trimEnd(), style = MaterialTheme.typography.bodyMedium.copy(fontFamily = com.syed.anvil.ui.theme.Mono, fontSize = 13.sp, lineHeight = 19.sp), softWrap = false)
+                com.syed.anvil.ui.highlight.HText(uid, "q.code", code, style = MaterialTheme.typography.bodyMedium.copy(fontFamily = com.syed.anvil.ui.theme.Mono, fontSize = 13.sp, lineHeight = 19.sp), softWrap = false)
             }
         }
     }

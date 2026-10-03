@@ -42,6 +42,7 @@ import com.syed.anvil.content.correctAnswer
 import com.syed.anvil.content.explanation
 import com.syed.anvil.content.optionList
 import com.syed.anvil.progress.Flag
+import com.syed.anvil.ui.component.HandMirror
 import com.syed.anvil.ui.theme.LocalPalette
 import kotlinx.coroutines.delay
 
@@ -75,11 +76,11 @@ fun QuizSession(
     val revealed = selected != null
 
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        HandMirror { Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
             Text(pill, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (stoppable && !done && deck.isNotEmpty()) StopButton { done = true }
-        }
+        } }
 
         if (deck.isEmpty()) {
             Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -128,8 +129,8 @@ fun QuizSession(
                 }
             }
             if (revealed) {
-                if (uid != null) FlagBar(flags[uid] ?: Flag(), uid, services.progress, labels = true)
-                q.explanation?.let { ExplanationBox(module, it, selected == correct) }
+                if (uid != null) FlagBar(flags[uid] ?: Flag(), uid, services.progress, labels = true, itemId = q.id, onDeleted = { if (idx + 1 >= deck.size) done = true else { idx++; selected = null } })
+                q.explanation?.let { ExplanationBox(module, it, selected == correct, uid = uid) }
                 Button(
                     onClick = { if (idx + 1 >= deck.size) done = true else { idx++; selected = null } },
                     Modifier.fillMaxWidth(),

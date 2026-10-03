@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
@@ -31,7 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.syed.anvil.ui.component.AnvilTopBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -82,6 +83,7 @@ class ModuleNav(
     val onSaved: (kind: PoolSet, group: String) -> Unit,
     val onSearchHit: (Item) -> Unit,
     val onWritten: () -> Unit,
+    val onBin: () -> Unit,
     val onPractice: (String) -> Unit,
     val onPracticeImportant: () -> Unit,
     val onMath: () -> Unit,
@@ -102,10 +104,11 @@ fun ModuleScreen(vm: AnvilViewModel, id: ModuleId, nav: ModuleNav) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
+            AnvilTopBar(
                 title = { Text(id.title, style = MaterialTheme.typography.headlineSmall) },
                 navigationIcon = { IconButton(onClick = nav.onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                 actions = {
+                    IconButton(onClick = nav.onBin) { Icon(Icons.Filled.DeleteOutline, "Recycle bin") }
                     IconButton(onClick = { vm.refreshContent(id) }, enabled = online && sync !is SyncState.Running) {
                         Icon(Icons.Filled.Refresh, "Refresh")
                     }

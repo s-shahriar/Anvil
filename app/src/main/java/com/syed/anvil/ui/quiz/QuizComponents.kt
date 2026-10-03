@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Home
@@ -57,6 +58,11 @@ import com.syed.anvil.content.Item
 import com.syed.anvil.progress.Flag
 import com.syed.anvil.progress.FlagRules
 import com.syed.anvil.progress.ProgressRepository
+import com.syed.anvil.ui.component.ConfirmTrashDialog
+import com.syed.anvil.ui.component.HandMirror
+import com.syed.anvil.ui.component.LocalTrash
+import com.syed.anvil.ui.highlight.HText
+import com.syed.anvil.ui.highlight.HtmlHText
 import com.syed.anvil.ui.rich.PlainQuestionText
 import com.syed.anvil.ui.rich.RichText
 import com.syed.anvil.ui.theme.LocalPalette
@@ -64,7 +70,7 @@ import com.syed.anvil.ui.theme.LocalPalette
 /** General content is HTML; ICT content is plain text (newlines matter, and MCQ prompts may carry code). */
 @Composable
 fun QuestionBody(module: ModuleId, item: Item, modifier: Modifier = Modifier) {
-    if (module == ModuleId.ICT) PlainQuestionText(item.question, modifier) else RichText(item.question, modifier)
+    if (module == ModuleId.ICT) PlainQuestionText(item.question, modifier, uid = item.uid) else HtmlHText(item.uid, "q", item.question, modifier)
 }
 
 @Composable
@@ -106,7 +112,7 @@ fun OptionRow(module: ModuleId, letter: String, text: String, state: OptState, e
 }
 
 @Composable
-fun ExplanationBox(module: ModuleId, html: String, correct: Boolean?, modifier: Modifier = Modifier) {
+fun ExplanationBox(module: ModuleId, html: String, correct: Boolean?, modifier: Modifier = Modifier, uid: String? = null) {
     val p = LocalPalette.current
     Column(
         modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).background(p.elevated).padding(14.dp),
@@ -123,23 +129,28 @@ fun ExplanationBox(module: ModuleId, html: String, correct: Boolean?, modifier: 
                 )
             }
         }
-        ContentText(module, html)
+        if (module == ModuleId.ICT) HText(uid, "explanation", html, style = MaterialTheme.typography.bodyMedium)
+        else HtmlHText(uid, "explanation", html, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
 /** Nailed / Important / Weak / Note for one question; Weak only appears once a question is Important and not Nailed. */
 @Composable
-fun FlagBar(flag: Flag, uid: String, progress: ProgressRepository, modifier: Modifier = Modifier, labels: Boolean = false) {
+fun FlagBar(flag: Flag, uid: String, progress: ProgressRepository, modifier: Modifier = Modifier, labels: Boolean = false, itemId: String? = null, onDeleted: () -> Unit = {}) {
     val p = LocalPalette.current
     var noteOpen by remember { mutableStateOf(false) }
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+    var confirmTrash by remember { mutableStateOf(false) }
+    val trash = LocalTrash.current
+    HandMirror { Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         FlagChip(Icons.Filled.Star, if (flag.nailed) "Nailed!" else "Nail It", flag.nailed, p.ok, labels) { progress.update(uid, FlagRules::toggleNailed) }
         FlagChip(Icons.Filled.Bookmark, if (flag.important) "Saved!" else "Important", flag.important, p.imp, labels) { progress.update(uid, FlagRules::toggleImportant) }
         if (flag.important && !flag.nailed) {
             FlagChip(Icons.Filled.LocalFireDepartment, if (flag.weak) "Weak!" else "Weak", flag.weak, p.warn, labels) { progress.update(uid, FlagRules::toggleWeak) }
         }
         FlagChip(Icons.Filled.EditNote, "Note", flag.note != null, MaterialTheme.colorScheme.primary, labels) { noteOpen = true }
-    }
+        if (trash != null && itemId != null) FlagChip(Icons.Filled.Delete, "Delete", false, p.bad, labels) { confirmTrash = true }
+    } }
+    if (confirmTrash && trash != null && itemId != null) ConfirmTrashDialog(onConfirm = { confirmTrash = false; trash.trash(itemId); onDeleted() }, onDismiss = { confirmTrash = false })
     if (noteOpen) {
         NoteDialog(
             initial = flag.note.orEmpty(),

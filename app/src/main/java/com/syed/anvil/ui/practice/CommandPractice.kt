@@ -55,6 +55,7 @@ import com.syed.anvil.practice.SampleTables
 import com.syed.anvil.progress.Flag
 import com.syed.anvil.progress.FlagRules
 import com.syed.anvil.progress.ProgressRepository
+import com.syed.anvil.ui.component.LocalLeftHand
 import com.syed.anvil.ui.reader.DataTable
 import com.syed.anvil.ui.theme.LocalPalette
 import com.syed.anvil.ui.theme.Mono
@@ -178,8 +179,10 @@ fun CommandPractice(drills: List<Drill>, flags: Map<String, Flag>, progress: Pro
             }
             SchemaBar(drill.sample)
             Row(verticalAlignment = Alignment.Top) {
+                // The buttons sit on the side of the thumb: first when left-handed.
+                if (LocalLeftHand.current) ImpWeakButtons(flagOf(drill), drill.id, progress)
                 Text(drill.problem.prompt, Modifier.weight(1f).padding(top = 10.dp), style = MaterialTheme.typography.titleMedium)
-                ImpWeakButtons(flagOf(drill), drill.id, progress)
+                if (!LocalLeftHand.current) ImpWeakButtons(flagOf(drill), drill.id, progress)
             }
 
             val border = when (status) { "correct" -> p.ok; "wrong" -> p.bad; else -> p.outline }

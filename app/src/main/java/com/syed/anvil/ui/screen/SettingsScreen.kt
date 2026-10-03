@@ -22,7 +22,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.syed.anvil.ui.component.AnvilTopBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -48,7 +48,7 @@ fun SettingsScreen(vm: AnvilViewModel, activity: Activity, onBack: () -> Unit) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
+            AnvilTopBar(
                 title = { Text("Settings", style = MaterialTheme.typography.headlineSmall) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
@@ -67,6 +67,13 @@ fun SettingsScreen(vm: AnvilViewModel, activity: Activity, onBack: () -> Unit) {
                             label = { Text(mode.name.lowercase().replaceFirstChar(Char::uppercase)) },
                         )
                     }
+                }
+            }
+            Section("Layout") {
+                Text("Mirrors the top bars and button rows so they sit under your thumb.", style = MaterialTheme.typography.bodySmall, color = LocalPalette.current.text3)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(!vm.leftHand, { vm.chooseLeftHand(false) }, { Text("Right-hand") })
+                    FilterChip(vm.leftHand, { vm.chooseLeftHand(true) }, { Text("Left-hand") })
                 }
             }
             ModuleId.entries.forEach { id -> ModuleSection(vm, activity, id) }

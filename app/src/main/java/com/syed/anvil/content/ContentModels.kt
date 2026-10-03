@@ -49,6 +49,13 @@ class ModuleContent(
 ) {
     val total: Int get() = groups.sumOf { it.count }
 
+    /** The same content minus the questions with these row ids (the recycle bin hides them this way). */
+    fun without(ids: Set<String>): ModuleContent {
+        val names = HashMap<String, String>(); val sort = HashMap<String, Int>()
+        groups.forEach { g -> g.topics.forEachIndexed { i, t -> names[t.key] = t.name; sort[t.key] = i } }
+        return TopicCatalog.build(module, allItems().filter { it.id !in ids }.toList(), names, sort, subtopics, syncedAt, writtenCategories, writtenCards, version)
+    }
+
     /** A topic's sub-topics, in the order the admin set (LiveMCQ only). */
     fun subtopicsFor(topicSlug: String): List<Subtopic> = Subtopics.forTopic(subtopics, topicSlug)
     fun items(group: String, topic: String): List<Item> = byTopic["$group/$topic"].orEmpty()

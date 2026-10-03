@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,6 +60,7 @@ fun HomeScreen(vm: AnvilViewModel, dark: Boolean, onModule: (ModuleId) -> Unit, 
                     Text("Anvil", style = MaterialTheme.typography.displaySmall)
                     Text("Forge your preparation", style = MaterialTheme.typography.bodyMedium, color = LocalPalette.current.text3)
                 }
+                IconButton(onClick = { vm.chooseLeftHand(!vm.leftHand) }) { Icon(Icons.Filled.PanTool, if (vm.leftHand) "Left-hand layout: switch to right" else "Right-hand layout: switch to left", tint = if (vm.leftHand) MaterialTheme.colorScheme.primary else LocalPalette.current.text3) }
                 IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, "Settings") }
             }
             UpdateCard(vm, showWhenIdle = false)

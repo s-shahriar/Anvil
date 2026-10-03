@@ -75,7 +75,7 @@ fun StudyCard(
         if (revealed) {
             val expl = item.explanation
             if (expl != null) {
-                if (explOpen) ExplanationBox(module, expl, selected == correct)
+                if (explOpen) ExplanationBox(module, expl, selected == correct, uid = item.uid)
                 else TextButton(onClick = { explOpen = true }) { Text("ব্যাখ্যা দেখাও") }
             }
             TextButton(onClick = { selected = null; explOpen = false }) { Text("লুকাও") }
@@ -84,7 +84,7 @@ fun StudyCard(
             flag.note?.let { n ->
                 Text(n, Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(p.elevated).padding(10.dp), style = MaterialTheme.typography.bodyMedium)
             }
-            FlagBar(flag, uid, progress)
+            FlagBar(flag, uid, progress, itemId = item.id)
         }
     }
 }

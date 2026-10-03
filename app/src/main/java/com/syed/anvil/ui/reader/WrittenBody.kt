@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.syed.anvil.content.QBlock
+import com.syed.anvil.ui.highlight.HText
 import com.syed.anvil.content.splitQuestionBlocks
 import com.syed.anvil.ui.rich.CodeTokens
 import com.syed.anvil.ui.rich.RemoteImage
@@ -96,10 +97,11 @@ fun CodeBlock(code: String, lang: String?, modifier: Modifier = Modifier) {
 
 /** ASCII diagram: monospace, never wrapped, scrolls sideways. */
 @Composable
-fun DiagramBlock(text: String, modifier: Modifier = Modifier) {
+fun DiagramBlock(text: String, modifier: Modifier = Modifier, uid: String? = null, block: String = "diagram", editable: Boolean = true) {
     val p = LocalPalette.current
     Box(modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(p.elevated).horizontalScroll(rememberScrollState()).padding(12.dp)) {
-        Text(text.trimEnd(), style = MaterialTheme.typography.bodyMedium.copy(fontFamily = Mono, fontSize = 12.sp, lineHeight = 16.sp), softWrap = false)
+        // The web highlights the diagram's text as written (no trimming), so the block text is the original string.
+        HText(uid, block, text, style = MaterialTheme.typography.bodyMedium.copy(fontFamily = Mono, fontSize = 12.sp, lineHeight = 16.sp), softWrap = false, editable = editable, raw = text)
     }
 }
 
@@ -119,7 +121,7 @@ private fun Dot() {
  * widths don't fit.
  */
 @Composable
-fun DataTable(headers: List<String>?, rows: List<List<String>>, modifier: Modifier = Modifier) {
+fun DataTable(headers: List<String>?, rows: List<List<String>>, modifier: Modifier = Modifier, uid: String? = null, prefix: String? = null) {
     val p = LocalPalette.current
     val cols = maxOf(headers?.size ?: 0, rows.maxOfOrNull { it.size } ?: 0).coerceAtLeast(1)
     val weights = remember(headers, rows) {
@@ -136,21 +138,22 @@ fun DataTable(headers: List<String>?, rows: List<List<String>>, modifier: Modifi
         val total = weights.sum()
         val widths: List<Dp> = weights.map { minCol + spare * (it / total) }
         Column(Modifier.horizontalScroll(rememberScrollState())) {
-            @Composable fun line(cells: List<String>, header: Boolean, shaded: Boolean) {
+            @Composable fun line(cells: List<String>, header: Boolean, shaded: Boolean, rowIndex: Int = -1) {
                 Row(Modifier.height(IntrinsicSize.Min)) {
                     for (j in 0 until cols) {
                         Box(
                             Modifier.width(widths[j]).fillMaxHeight().background(if (header) p.primaryContainer else if (shaded) p.elevated else p.surface)
                                 .border(.5.dp, p.outline).padding(10.dp),
                         ) {
-                            Text(cells.getOrElse(j) { "" }, style = MaterialTheme.typography.bodyMedium, fontWeight = if (header) FontWeight.SemiBold else null,
+                            if (!header && uid != null && prefix != null) HText(uid, "$prefix.r$rowIndex.c$j", cells.getOrElse(j) { "" }, style = MaterialTheme.typography.bodyMedium)
+                            else Text(cells.getOrElse(j) { "" }, style = MaterialTheme.typography.bodyMedium, fontWeight = if (header) FontWeight.SemiBold else null,
                                 color = if (header) p.onPrimaryContainer else androidx.compose.ui.graphics.Color.Unspecified)
                         }
                     }
                 }
             }
             if (headers != null) line(headers, header = true, shaded = false)
-            rows.forEachIndexed { i, r -> line(r, header = false, shaded = i % 2 == 1) }
+            rows.forEachIndexed { i, r -> line(r, header = false, shaded = i % 2 == 1, rowIndex = i) }
         }
     }
 }
@@ -166,15 +169,19 @@ private fun AnswerImage(path: String) {
     bmp?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small), contentScale = ContentScale.FillWidth) }
 }
 
-/** The question: paragraphs, hanging-indent list items, and gaps, as the web renders it. */
+/**
+ * The question: paragraphs, hanging-indent list items, and gaps, as the web renders it. A one-line question is block `q`;
+ * otherwise each line is `q.<index>` (the index counts the gaps too, so it matches the web's saved highlights).
+ */
 @Composable
-fun QuestionTextBlocks(text: String, modifier: Modifier = Modifier) {
+fun QuestionTextBlocks(text: String, modifier: Modifier = Modifier, uid: String? = null, editable: Boolean = true) {
     val blocks = remember(text) { splitQuestionBlocks(text) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        blocks.forEach { b ->
+        blocks.forEachIndexed { i, b ->
+            val key = if (blocks.size <= 1) "q" else "q.$i"
             when (b) {
-                is QBlock.Para -> Text(b.text, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                is QBlock.ListItem -> Text(b.text, Modifier.padding(start = 16.dp), style = MaterialTheme.typography.bodyMedium)
+                is QBlock.Para -> HText(uid, key, b.text, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium), editable = editable)
+                is QBlock.ListItem -> HText(uid, key, b.text, Modifier.padding(start = 16.dp), style = MaterialTheme.typography.bodyMedium, editable = editable)
                 QBlock.Gap -> Spacer(Modifier.height(6.dp))
             }
         }
@@ -183,7 +190,7 @@ fun QuestionTextBlocks(text: String, modifier: Modifier = Modifier) {
 
 /** The answer, in the order the web shows it: code, image, summary, points, diagram, table, mistakes, mnemonic, extended. */
 @Composable
-fun WrittenBody(a: JSONObject, modifier: Modifier = Modifier) {
+fun WrittenBody(a: JSONObject, modifier: Modifier = Modifier, uid: String? = null) {
     val p = LocalPalette.current
     val primary = MaterialTheme.colorScheme.primary
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -198,25 +205,26 @@ fun WrittenBody(a: JSONObject, modifier: Modifier = Modifier) {
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Text("সংক্ষেপ", style = MaterialTheme.typography.labelLarge, color = primary)
-                lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                if (s is JSONArray) lines.forEachIndexed { i, l -> HText(uid, "summary.$i", l, style = MaterialTheme.typography.bodyMedium) }
+                else HText(uid, "summary", lines.first(), style = MaterialTheme.typography.bodyMedium)
             }
         }
 
-        a.optJSONArray("points")?.let { Points(it) }
+        a.optJSONArray("points")?.let { Points(it, uid) }
 
-        a.str("diagram")?.let { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { BlockLabel("Diagram"); DiagramBlock(it) } }
+        a.str("diagram")?.let { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { BlockLabel("Diagram"); DiagramBlock(it, uid = uid, block = "diagram") } }
 
         a.optJSONObject("table")?.takeIf { (it.optJSONArray("rows")?.length() ?: 0) > 0 }?.let { t ->
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 BlockLabel("তুলনা")
-                DataTable(t.optJSONArray("headers")?.strings(), rows(t.getJSONArray("rows")))
+                DataTable(t.optJSONArray("headers")?.strings(), rows(t.getJSONArray("rows")), uid = uid, prefix = "table")
             }
         }
 
         a.optJSONArray("mistakes")?.takeIf { it.length() > 0 }?.let { m ->
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 BlockLabel("সাধারণ ভুল")
-                DataTable(listOf("❌ ভুল ধারণা", "✅ আসল কথা"), rows(m))
+                DataTable(listOf("❌ ভুল ধারণা", "✅ আসল কথা"), rows(m), uid = uid, prefix = "mistakes")
             }
         }
 
@@ -226,11 +234,11 @@ fun WrittenBody(a: JSONObject, modifier: Modifier = Modifier) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Icon(Icons.Filled.Psychology, null, Modifier.size(20.dp), tint = primary)
-                Text(it, style = MaterialTheme.typography.bodyMedium)
+                HText(uid, "mnemonic", it, style = MaterialTheme.typography.bodyMedium)
             }
         }
 
-        a.optJSONObject("extended")?.let { Extended(it) }
+        a.optJSONObject("extended")?.let { Extended(it, uid) }
     }
 }
 
@@ -241,7 +249,7 @@ private fun rows(a: JSONArray): List<List<String>> = List(a.length()) { i -> a.o
  * Blocks break the list in two, so a diagram sits right after the part it illustrates.
  */
 @Composable
-private fun Points(points: JSONArray) {
+private fun Points(points: JSONArray, uid: String?) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         for (i in 0 until points.length()) {
             val pt = points.get(i)
@@ -250,14 +258,14 @@ private fun Points(points: JSONArray) {
                     BlockLabel(pt.str("label") ?: pt.str("codeLang") ?: "Code"); CodeBlock(pt.getString("code"), pt.str("codeLang"))
                 }
                 pt is JSONObject && pt.str("diagram") != null -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    BlockLabel(pt.str("label") ?: "Diagram"); DiagramBlock(pt.getString("diagram"))
+                    BlockLabel(pt.str("label") ?: "Diagram"); DiagramBlock(pt.getString("diagram"), uid = uid, block = "points.$i.diagram")
                 }
                 pt is JSONObject && pt.str("sub") != null -> Row(Modifier.padding(start = 22.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("–", style = MaterialTheme.typography.bodyMedium, color = LocalPalette.current.text3)
-                    Text(pt.getString("sub"), style = MaterialTheme.typography.bodyMedium)
+                    HText(uid, "points.$i", pt.getString("sub"), style = MaterialTheme.typography.bodyMedium)
                 }
                 else -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Dot(); Text(pt.toString(), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    Dot(); HText(uid, "points.$i", pt.toString(), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }
@@ -265,7 +273,7 @@ private fun Points(points: JSONArray) {
 }
 
 @Composable
-private fun Extended(e: JSONObject) {
+private fun Extended(e: JSONObject, uid: String?) {
     val p = LocalPalette.current
     val primary = MaterialTheme.colorScheme.primary
     var open by rememberSaveable(e.str("title")) { mutableStateOf(false) }
@@ -278,9 +286,9 @@ private fun Extended(e: JSONObject) {
             Text(e.str("title") ?: "More", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, color = primary, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         if (open) {
-            e.optJSONArray("points")?.strings()?.forEach { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { Dot(); Text(it, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium) } }
-            e.optJSONArray("table")?.takeIf { it.length() > 0 }?.let { DataTable(e.optJSONArray("tableHeaders")?.strings(), rows(it)) }
-            e.str("diagram")?.let { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { BlockLabel("Diagram"); DiagramBlock(it) } }
+            e.optJSONArray("points")?.strings()?.forEachIndexed { i, t -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { Dot(); HText(uid, "ext.points.$i", t, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium) } }
+            e.optJSONArray("table")?.takeIf { it.length() > 0 }?.let { DataTable(e.optJSONArray("tableHeaders")?.strings(), rows(it), uid = uid, prefix = "ext.table") }
+            e.str("diagram")?.let { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { BlockLabel("Diagram"); DiagramBlock(it, uid = uid, block = "ext.diagram") } }
         }
     }
 }
