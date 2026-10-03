@@ -1,0 +1,14 @@
+/* Base for Anvil's pre-rendered formula pages. Colours come from the :root variables Anvil injects. */
+@font-face { font-family: 'Plus Jakarta Sans'; src: url(fonts/plus_jakarta_sans_regular.ttf); font-weight: 400; }
+@font-face { font-family: 'Plus Jakarta Sans'; src: url(fonts/plus_jakarta_sans_semibold.ttf); font-weight: 600; }
+@font-face { font-family: 'Plus Jakarta Sans'; src: url(fonts/plus_jakarta_sans_bold.ttf); font-weight: 700; }
+@font-face { font-family: 'JetBrains Mono'; src: url(fonts/jetbrains_mono_regular.ttf); font-weight: 400; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
+body { font-family: var(--font-body); font-size: 15px; line-height: 1.6; -webkit-text-size-adjust: 100%; }
+button { font-family: inherit; }
+/* The web page's own top bar and pickers are native in Anvil. */
+.mf-wrap { padding: 8px 10px 56px; }
+.eq-page { padding: 8px 10px 56px; }
+.mf-imp-btn svg { fill: none; }
+.mf-imp-btn.on svg { fill: currentColor; }

@@ -17,7 +17,32 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.TrackChanges
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Tag
+import androidx.compose.material.icons.filled.CurrencyBitcoin
+import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FileCopy
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Straighten
+import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Waves
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Balance
+import androidx.compose.material.icons.filled.Autorenew
+import androidx.compose.material.icons.filled.Eco
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.Apartment
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
@@ -77,6 +102,7 @@ import com.syed.anvil.ui.rich.RichText
 import com.syed.anvil.ui.theme.LocalPalette
 import com.syed.anvil.ui.theme.isDark
 import com.syed.anvil.ui.theme.TopicColors
+import androidx.compose.ui.platform.LocalContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -89,39 +115,53 @@ private val iconMap: Map<String, ImageVector> = mapOf(
     "Database" to Icons.Filled.Storage, "Landmark" to Icons.Filled.AccountBalance, "Gauge" to Icons.Filled.Speed,
     "Ship" to Icons.Filled.DirectionsBoat, "CreditCard" to Icons.Filled.CreditCard, "Layers" to Icons.Filled.Layers,
     "Zap" to Icons.Filled.Bolt, "Flame" to Icons.Filled.LocalFireDepartment, "PieChart" to Icons.Filled.PieChart,
+    // Financial Terms
+    "Star" to Icons.Filled.Star, "Building2" to Icons.Filled.Apartment, "Banknote" to Icons.Filled.Payments, "BarChart2" to Icons.Filled.BarChart,
+    "Leaf" to Icons.Filled.Eco, "RefreshCw" to Icons.Filled.Autorenew, "Scale" to Icons.Filled.Balance, "FileText" to Icons.Filled.Description,
+    "Eye" to Icons.Filled.Visibility, "Waves" to Icons.Filled.Waves, "ArrowLeftRight" to Icons.Filled.SwapHoriz, "Ruler" to Icons.Filled.Straighten,
+    "Home" to Icons.Filled.Home, "ClipboardList" to Icons.AutoMirrored.Filled.Assignment, "CheckSquare" to Icons.Filled.CheckBox,
+    "Files" to Icons.Filled.FileCopy, "PenLine" to Icons.Filled.Edit, "DollarSign" to Icons.Filled.AttachMoney, "Package" to Icons.Filled.Inventory2,
+    "Bitcoin" to Icons.Filled.CurrencyBitcoin, "AlertTriangle" to Icons.Filled.Warning, "Hash" to Icons.Filled.Tag, "Search" to Icons.Filled.Search,
+    "Folder" to Icons.Filled.Folder, "AlertCircle" to Icons.Filled.Error, "Target" to Icons.Filled.TrackChanges, "Award" to Icons.Filled.EmojiEvents,
 )
 
 private fun JSONArray?.strings(): List<String> = this?.let { a -> List(a.length()) { a.optString(it) } }.orEmpty()
 
-private class Card(val cat: String?, val serial: Int, val icon: String, val title: String, val subtitle: String, val body: String, val tip: String?, val issues: List<String>, val benefits: List<String>) {
+/** One reference card: used by General's Written » Data (from the database) and Financial Terms (bundled). */
+class DataCardModel(val cat: String?, val serial: Int, val icon: String, val title: String, val subtitle: String, val body: String, val tip: String?, val issues: List<String>, val benefits: List<String>) {
     val haystack: String = SearchText.normalize(HtmlParser.plainText("$title $subtitle $body ${cat.orEmpty()} ${tip.orEmpty()}"))
 }
 
-/** "Written » Data": the reference cards (a figure and what it means), filtered by category and searchable. */
-@OptIn(ExperimentalMaterial3Api::class)
+/** "Written » Data": the reference cards (a figure and what it means), from the offline copy of General. */
 @Composable
 fun WrittenDataScreen(vm: AnvilViewModel, onBack: () -> Unit) {
     val m = vm.module(ModuleId.GENERAL)
     val state by m.content.state.collectAsState()
     val content = (state as? ContentState.Ready)?.content
-    val p = LocalPalette.current
-    val dark = p.isDark
-    var cat by rememberSaveable { mutableStateOf<String?>(null) }
-    var query by rememberSaveable { mutableStateOf("") }
-
+    val dark = LocalPalette.current.isDark
     val catNames = remember(content) { content?.writtenCategories.orEmpty().associate { it.getString("id") to it.getString("name") } }
-    val catColor = remember(content, dark) {
-        content?.writtenCategories.orEmpty().associate { it.getString("name") to TopicColors.parse(it.optString("color"), dark, Color.Gray) }
+    val categories = remember(content, dark) {
+        content?.writtenCategories.orEmpty().map { it.getString("name") to TopicColors.parse(it.optString("color"), dark, Color.Gray) }
     }
     val cards = remember(content) {
         content?.writtenCards.orEmpty().map { c ->
-            Card(
+            DataCardModel(
                 catNames[c.optString("category_id")], c.optInt("serial"), c.optString("icon"), c.optString("title"), c.optString("subtitle"),
                 c.optString("body"), c.optString("tip").takeIf { it.isNotEmpty() && !c.isNull("tip") },
                 c.optJSONArray("issues").strings(), c.optJSONArray("benefits").strings(),
             )
         }
     }
+    DataCardsScreen("Written · Data", "যেকোনো টপিক খুঁজুন...", categories, cards, onBack)
+}
+
+/** Category chips, search, and a list of reference cards. Shared by every card-based reference page. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DataCardsScreen(title: String, searchHint: String, categories: List<Pair<String, Color>>, cards: List<DataCardModel>, onBack: () -> Unit) {
+    var cat by rememberSaveable { mutableStateOf<String?>(null) }
+    var query by rememberSaveable { mutableStateOf("") }
+    val catColor = categories.toMap()
     val tokens = SearchText.tokens(query)
     val shown = cards.filter { (cat == null || it.cat == cat) && (tokens.isEmpty() || SearchText.matches(it.haystack, tokens)) }
 
@@ -129,7 +169,7 @@ fun WrittenDataScreen(vm: AnvilViewModel, onBack: () -> Unit) {
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("Written · Data", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(title, style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
@@ -143,7 +183,7 @@ fun WrittenDataScreen(vm: AnvilViewModel, onBack: () -> Unit) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         item { FilterChip(cat == null, { cat = null }, { Text("সব") }) }
-                        items(catNames.values.toList(), key = { it }) { name ->
+                        items(categories.map { it.first }, key = { it }) { name ->
                             val color = catColor[name] ?: Color.Gray
                             FilterChip(
                                 cat == name, { cat = name }, { Text(name) },
@@ -152,7 +192,7 @@ fun WrittenDataScreen(vm: AnvilViewModel, onBack: () -> Unit) {
                         }
                     }
                     OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), singleLine = true,
-                        leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text("যেকোনো টপিক খুঁজুন...") })
+                        leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text(searchHint) })
                 }
             }
             if (shown.isEmpty()) item { Text("কোনো ফলাফল পাওয়া যায়নি", Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge) }
@@ -162,7 +202,7 @@ fun WrittenDataScreen(vm: AnvilViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-private fun DataCard(c: Card, color: Color) {
+private fun DataCard(c: DataCardModel, color: Color) {
     val p = LocalPalette.current
     Column(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).background(p.surface).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -211,4 +251,21 @@ private fun Effects(label: String, icon: ImageVector, color: Color, items: List<
             items.forEach { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Text("•", color = color); Text(it, style = MaterialTheme.typography.bodyMedium) } }
         }
     }
+}
+
+/** General » Utility » ফিনান্সিয়াল টার্ম: 51 bundled reference cards in 8 categories. */
+@Composable
+fun FinancialTermsScreen(onBack: () -> Unit) {
+    val ctx = LocalContext.current
+    val p = LocalPalette.current
+    val fallback = p.text3
+    val (categories, cards) = remember(p.isDark) {
+        val root = JSONObject(ctx.assets.open("utility/finance.json").bufferedReader().use { it.readText() })
+        val cats = root.getJSONArray("categories").let { a -> List(a.length()) { a.getJSONObject(it).let { o -> o.getString("name") to TopicColors.parse(o.optString("color"), p.isDark, fallback) } } }
+        val cs = root.getJSONArray("cards").let { a ->
+            List(a.length()) { i -> a.getJSONObject(i).let { o -> DataCardModel(o.optString("cat"), o.getInt("id"), o.optString("icon"), o.getString("title"), o.optString("subtitle"), o.getString("body"), null, emptyList(), emptyList()) } }
+        }
+        cats to cs
+    }
+    DataCardsScreen("ফিনান্সিয়াল টার্ম", "যেকোনো টার্ম খুঁজুন...", categories, cards, onBack)
 }

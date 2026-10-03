@@ -62,6 +62,7 @@ import com.syed.anvil.content.PoolSet
 import com.syed.anvil.content.QuizPool
 import com.syed.anvil.content.SearchText
 import com.syed.anvil.content.SyncState
+import com.syed.anvil.content.TopicCatalog
 import com.syed.anvil.progress.Flag
 import com.syed.anvil.ui.AnvilViewModel
 import com.syed.anvil.ui.component.Dot
@@ -83,6 +84,9 @@ class ModuleNav(
     val onWritten: () -> Unit,
     val onPractice: (String) -> Unit,
     val onPracticeImportant: () -> Unit,
+    val onMath: () -> Unit,
+    val onFinance: () -> Unit,
+    val onEquation: (String) -> Unit,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -157,6 +161,7 @@ private fun EmptyState(online: Boolean, onDownload: () -> Unit) {
 
 private const val SEARCH_PAGE = 8
 private const val PRACTICE = "practice"
+private const val EQUATION = "equation"
 
 @Composable
 private fun ModuleBody(id: ModuleId, content: ModuleContent, flags: Map<String, Flag>, nav: ModuleNav) {
@@ -164,7 +169,9 @@ private fun ModuleBody(id: ModuleId, content: ModuleContent, flags: Map<String, 
     var selected by rememberSaveable { mutableStateOf(content.groups.firstOrNull()?.key) }
     // ICT has one more section that is not in the database: the bundled Linux and SQL drills.
     val inPractice = id == ModuleId.ICT && selected == PRACTICE
+    val inEquation = id == ModuleId.ICT && selected == EQUATION
     val app = LocalContext.current.applicationContext as AnvilApp
+    val equationTopics = remember { FormulaIndex.equationTopics(app) }
     val practiceFlags = remember(flags) { flags.filter { it.key.startsWith("practice__") } }
     val group = content.groups.firstOrNull { it.key == selected } ?: content.groups.firstOrNull() ?: return
     val groupItems = remember(content, group) { group.topics.flatMap { content.items(group.key, it.slug) }.filter { it.isQuizzable || LongForm.isLongForm(it) } }
@@ -194,7 +201,7 @@ private fun ModuleBody(id: ModuleId, content: ModuleContent, flags: Map<String, 
                 Action(Icons.Filled.Bookmark, "Important", saved, p.imp, Modifier.weight(1f)) { nav.onPracticeImportant() }
                 Column(Modifier.weight(1f).padding(14.dp)) { Text("$weak weak", style = MaterialTheme.typography.labelLarge, color = p.warn) }
             }
-        } else item {
+        } else if (!inEquation) item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 // Exams draw multiple-choice questions only; Written/Extra/Viva have none.
                 if (!LongForm.isLongForm(group.key)) Action(Icons.Filled.Timer, "Exam", null, MaterialTheme.colorScheme.primary, Modifier.weight(1f)) { nav.onExam(group.key) }
@@ -214,10 +221,20 @@ private fun ModuleBody(id: ModuleId, content: ModuleContent, flags: Map<String, 
                 Text("${content.writtenCards.size}", style = MaterialTheme.typography.labelLarge, color = p.onPrimaryContainer)
             }
         }
+        if (id == ModuleId.GENERAL) item {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                UtilityCard("গণিত সূত্র", "Math formulas", nav.onMath, Modifier.weight(1f))
+                UtilityCard("ফিনান্সিয়াল টার্ম", "Financial terms", nav.onFinance, Modifier.weight(1f))
+            }
+        }
         item {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(content.groups, key = { it.key }) { g ->
-                    FilterChip(selected = !inPractice && g.key == group.key, onClick = { selected = g.key; query = ""; debounced = "" }, label = { Text("${g.title} · ${g.count}") })
+                    FilterChip(selected = !inPractice && !inEquation && g.key == group.key, onClick = { selected = g.key; query = ""; debounced = "" }, label = { Text("${g.title} · ${g.count}") })
+                }
+                if (id == ModuleId.ICT) item(key = EQUATION) {
+                    FilterChip(selected = inEquation, onClick = { selected = EQUATION; query = ""; debounced = "" },
+                        label = { Text("Equation · ${equationTopics.sumOf { t -> t.equations }}") })
                 }
                 if (id == ModuleId.ICT) item(key = PRACTICE) {
                     FilterChip(selected = inPractice, onClick = { selected = PRACTICE; query = ""; debounced = "" },
@@ -225,7 +242,7 @@ private fun ModuleBody(id: ModuleId, content: ModuleContent, flags: Map<String, 
                 }
             }
         }
-        if (!inPractice) item {
+        if (!inPractice && !inEquation) item {
             OutlinedTextField(
                 query, { query = it }, Modifier.fillMaxWidth(), singleLine = true,
                 leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text("Search ${group.title}") },
@@ -240,6 +257,18 @@ private fun ModuleBody(id: ModuleId, content: ModuleContent, flags: Map<String, 
                     Column(Modifier.weight(1f)) {
                         Text("${c.name} Practice", style = MaterialTheme.typography.titleMedium)
                         Text("${c.topics.size} topics · ${c.topics.sumOf { t -> t.practice.size }} drills", style = MaterialTheme.typography.labelMedium, color = p.text3)
+                    }
+                }
+            }
+        } else if (inEquation) {
+            items(equationTopics, key = { it.id }) { t ->
+                Row(
+                    Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).background(p.surface).clickable { nav.onEquation(t.id) }.padding(horizontal = 18.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(TopicCatalog.ictTopicNames[t.id] ?: t.id, style = MaterialTheme.typography.titleMedium)
+                        Text("${t.groups.size} groups · ${t.equations} equations", style = MaterialTheme.typography.labelMedium, color = p.text3)
                     }
                 }
             }
@@ -282,5 +311,14 @@ private fun Action(icon: ImageVector, label: String, count: Int?, color: Color, 
             Icon(icon, null, Modifier.padding(0.dp), tint = color); Text(label, style = MaterialTheme.typography.labelMedium)
         }
         Text(count?.toString() ?: "Start", style = MaterialTheme.typography.titleLarge, color = if (count == null) color else Color.Unspecified)
+    }
+}
+
+@Composable
+private fun UtilityCard(title: String, sub: String, onClick: () -> Unit, modifier: Modifier) {
+    val p = LocalPalette.current
+    Column(modifier.clip(MaterialTheme.shapes.medium).background(p.primaryContainer).clickable(onClick = onClick).padding(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(title, style = MaterialTheme.typography.titleMedium, color = p.onPrimaryContainer)
+        Text(sub, style = MaterialTheme.typography.labelMedium, color = p.onPrimaryContainer)
     }
 }

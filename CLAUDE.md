@@ -52,23 +52,37 @@ Three scopes in `ui/theme/Palette.kt`: `SHELL` (rust, the Anvil home/settings), 
 2. ✅ Quiz core (works for General and ICT MCQ): topic mode select + pool chooser, MCQ quiz, study (paged, filters, search),
    exam (setup + run, two-tap stop), Nailed/Important lists, group search, notes, HTML rendering with offline images.
    Also done: LiveMCQ sub-topic switcher in Study, Written » Data page (cached offline, cache `version` upgrades old copies).
-   Still to do for General: Utility pages (math formulas with KaTeX, financial terms), left/right-hand toggle, recycle bin.
+   Also done: Utility pages (math formulas page, Financial Terms). Still to do for General: left/right-hand toggle, recycle bin.
 3. ✅ ICT Written/Extra/Viva reader (`ui/reader`, `ReaderScreen`): accordion cards, segments + sub-segments, hanging-indent
    questions, all answer blocks (code with highlighting, image, summary, points, ASCII diagram, table, mistakes, mnemonic,
    extended), search into answers with deep-link, flags/notes, resumable offline picture cache.
 4. ✅ Practice (`practice/`, `ui/practice`, `PracticeScreens`): bundled `assets/practice/{linux,sql}.json`, Info/Commands/Practice tabs, SQL-forgiving
    answer matching (ported exactly; flag ids `practice__<cat>__<topic>__<cmd>` match the web), Important list across both. It is a virtual
-   "Practice" group on the ICT module screen. Still to do: Equation (KaTeX + hand-drawn SVG diagrams, bundled), highlights.
+   "Practice" group on the ICT module screen.
+   Equation is done too (`ui/web`, `FormulaScreens`): a virtual "Equation" group on ICT, cover-and-recall. Still to do: highlights.
 5. Mobile extras (reminders, streaks, spaced repetition, timed exams).
 
+## Pre-rendered pages (math formulas, equations, financial terms)
+The web apps build these from JSX + KaTeX; Anvil ships them as static HTML in `app/src/main/assets/web` and shows each in a
+script-light `WebView` (`ui/web/FormulaPage.kt`: no network, no file access, JS only for `controller.js`). Regenerate with
+`node tools/prerender/build.mjs` (needs the two web projects next to Anvil, Node and Google Chrome; output is committed, so building
+the app needs none of it). The tool bundles the web components with esbuild (stubbing their app-only imports), renders them with cover mode
+forced ON, lets headless Chrome run the web's own uid code to tag each math card with `data-uid` (`m<hash>`), and copies KaTeX CSS/fonts.
+`controller.js` switches cover mode on/off, reveals one element per tap, and bridges stars to Anvil. Theme tokens are injected from the
+active palette. Re-run the tool whenever the web apps change those pages. Equation highlights will need the web's DOM anchoring ported
+into the WebView (blocks are already tagged `data-hl-block`).
+
 ## Open items (check later)
+- Math page: 13 of the owner's 15 saved `m…` marks match computed card ids; 2 (`m1y7v8pus1j3`, `mz4jpvp31v0`) match no current card
+  (probably retitled since). On the emulator the section chip row above the WebView did not paint until the first interaction;
+  likely a software-GL artefact, but check on a real phone. First paint of a page takes seconds on the emulator.
 - **Picture questions are not verified on screen.** All 129 images referenced by General are cached on the device (20 MB), but
   nobody has looked at one rendered. Where to look: General > LiveMCQ > মানসিক দক্ষতা (`lm_mental_ability`) > Study, page 4,
   first card ("Group the given figures into three classes…"); also the quiz screen and an image inside an explanation.
   Check size/aspect, dark mode, and the "Image not available offline" placeholder with the cache cleared.
 - Not yet looked at by hand: Extra and Viva readers, the Nailed/Important lists for long-form cards, Settings "Pictures: x of y",
   dark theme on the new screens, tablets / large font sizes.
-- Not built yet: left/right-hand toggle, recycle bin, General Utility pages (math formulas with KaTeX, financial terms), ICT Equation.
+- Not built yet: left/right-hand toggle, recycle bin, highlights (all modules).
 - Practice is verified for Linux and the SQL first topic only; SQL answers with multi-line `answers`, the Commands tab and the Important
   list screen have not been looked at by hand.
 

@@ -47,6 +47,9 @@ class AnvilViewModel(private val app: Application) : AndroidViewModel(app) {
     var themeMode by mutableStateOf(runCatching { ThemeMode.valueOf(prefs.getString("theme", "SYSTEM")!!) }.getOrDefault(ThemeMode.SYSTEM))
         private set
 
+    fun boolPref(key: String) = prefs.getBoolean(key, false)
+    fun setBoolPref(key: String, v: Boolean) = prefs.edit().putBoolean(key, v).apply()
+
     fun setTheme(mode: ThemeMode) { themeMode = mode; prefs.edit().putString("theme", mode.name).apply() }
 
     fun module(id: ModuleId) = anvil.module(id)

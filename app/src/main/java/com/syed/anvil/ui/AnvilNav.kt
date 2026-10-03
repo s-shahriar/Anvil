@@ -19,7 +19,10 @@ import com.syed.anvil.content.LongForm
 import com.syed.anvil.content.PoolSet
 import com.syed.anvil.ui.screen.ExamConfigScreen
 import com.syed.anvil.ui.screen.ExamRunScreen
+import com.syed.anvil.ui.screen.EquationScreen
+import com.syed.anvil.ui.screen.FinancialTermsScreen
 import com.syed.anvil.ui.screen.HomeScreen
+import com.syed.anvil.ui.screen.MathFormulasScreen
 import com.syed.anvil.ui.screen.ModeSelectScreen
 import com.syed.anvil.ui.screen.ModuleNav
 import com.syed.anvil.ui.screen.ModuleScreen
@@ -75,6 +78,9 @@ fun AnvilNav(vm: AnvilViewModel, dark: Boolean, activity: Activity) {
                         onWritten = { nav.navigate("written/${id.key}") },
                         onPractice = { cat -> nav.navigate("practice/$cat") },
                         onPracticeImportant = { nav.navigate("practiceimp") },
+                        onMath = { nav.navigate("math") },
+                        onFinance = { nav.navigate("finance") },
+                        onEquation = { t -> nav.navigate("equation/$t") },
                         onSearchHit = { item ->
                             val dest = if (LongForm.isLongForm(item)) "read" else "study"
                             nav.navigate("$dest/${id.key}/${item.group}/${item.topic}?focus=${Uri.encode(item.uid ?: "")}")
@@ -127,6 +133,9 @@ fun AnvilNav(vm: AnvilViewModel, dark: Boolean, activity: Activity) {
                 )
             }
         }
+        composable("math") { Themed(Scope.GENERAL) { MathFormulasScreen(vm, onBack = { nav.popBackStack() }) } }
+        composable("finance") { Themed(Scope.GENERAL) { FinancialTermsScreen(onBack = { nav.popBackStack() }) } }
+        composable("equation/{t}") { e -> Themed(Scope.ICT) { EquationScreen(vm, e.arg("t"), onBack = { nav.popBackStack() }) } }
         composable("practice/{cat}") { e ->
             Themed(Scope.ICT) { PracticeScreen(vm, e.arg("cat"), onBack = { nav.popBackStack() }) }
         }

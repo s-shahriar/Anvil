@@ -1,0 +1,237 @@
+/* Equation module — formula sheets: one diagram per group + cover-and-recall.
+   Loaded only with the /equation route. */
+
+.eq-page {
+  /* Diagram palette, aliased to the theme's own tokens so it follows dark mode. */
+  --eq-1: var(--accent);
+  --eq-2: var(--ok);
+  --eq-3: var(--warn);
+  --eq-4: var(--imp);
+  --eq-5: var(--bad);
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 16px 16px 80px;
+  overflow-x: clip;
+}
+
+/* ── Group jump chips ─────────────────────────────── */
+.eq-jump {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin-bottom: 20px;
+}
+.eq-jump-chip {
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border-md);
+  background: var(--surface-glass);
+  color: var(--text-2);
+  font-family: var(--font-body);
+  font-size: 0.78rem; font-weight: 600;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+.eq-jump-chip:hover {
+  color: var(--accent);
+  border-color: var(--border-bright);
+  background: var(--accent-light);
+}
+
+/* ── Group ────────────────────────────────────────── */
+.eq-group {
+  margin-bottom: 36px;
+  scroll-margin-top: 84px;
+}
+.eq-group-head {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 12px;
+}
+.eq-group-num {
+  width: 34px; height: 34px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 10px;
+  background: var(--accent-light);
+  color: var(--accent);
+  font-weight: 700; font-size: 0.9rem;
+}
+.eq-group-title {
+  font-family: var(--font-display);
+  font-size: 1.15rem; font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.eq-group-sub {
+  font-size: 0.78rem;
+  color: var(--text-3);
+  margin-top: 1px;
+}
+
+.eq-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
+}
+
+/* ── Diagram ──────────────────────────────────────── */
+.eq-diagram { margin-bottom: 14px; }
+.eq-diagram-scroll {
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-md) transparent;
+}
+/* Below ~560px the labels would shrink past readable, so the diagram keeps its
+   size and scrolls sideways instead. */
+.eq-diagram svg {
+  display: block;
+  width: 100%;
+  min-width: 560px;
+  max-width: 720px;
+  height: auto;
+  margin: 0 auto;
+  font-family: var(--font-body);
+}
+.eq-diagram figcaption {
+  margin-top: 8px;
+  font-size: 0.78rem;
+  color: var(--text-3);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* ── Symbol legend ────────────────────────────────── */
+.eq-symbols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 4px 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--elevated);
+  margin-bottom: 4px;
+}
+.eq-symbol {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 0.8rem;
+  min-width: 0;
+}
+.eq-symbol dt {
+  flex-shrink: 0;
+  min-width: 18px;
+  color: var(--accent);
+  font-weight: 700;
+}
+.eq-symbol dd { color: var(--text-2); }
+
+/* ── Equation row ─────────────────────────────────── */
+.eq-row {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 4px 14px;
+  padding: 10px 14px;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--elevated);
+  min-width: 0;
+}
+.eq-row-name {
+  font-size: 0.84rem; font-weight: 600;
+  color: var(--text-2);
+}
+/* No scroll box here: a fraction is taller than the line, so any overflow value
+   other than visible grows scrollbars. A formula too wide for the row wraps
+   instead — KaTeX breaks inline math at its operators. */
+.eq-row-formula {
+  margin-left: auto;
+  color: var(--accent);
+  font-size: 1rem;
+  min-width: 0;
+  max-width: 100%;
+}
+.eq-row-note {
+  flex-basis: 100%;
+  font-size: 0.78rem;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+.eq-rhs { display: inline-block; max-width: 100%; }
+.eq-tex .katex, .eq-tex .katex * { color: inherit; }
+.eq-tex .katex { font-size: 1.12em; }
+
+/* ── Mnemonic ─────────────────────────────────────── */
+.eq-mem {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border-left: 3px solid var(--eq-2);
+  background: var(--ok-tint);
+  font-size: 0.8rem;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+.eq-mem svg { flex-shrink: 0; margin-top: 3px; color: var(--eq-2); }
+
+/* ── Cover-and-recall mode ────────────────────────── */
+.eq-cover-btn.on {
+  color: var(--imp);
+  border-color: color-mix(in srgb, var(--imp) 45%, transparent);
+  background: var(--imp-tint);
+}
+.eq-cover-banner {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 18px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  color: var(--text-2);
+  background: var(--imp-tint);
+  border: 1px solid color-mix(in srgb, var(--imp) 35%, transparent);
+}
+.eq-cover-banner svg { flex-shrink: 0; color: var(--imp); }
+.eq-cover-banner strong { color: var(--imp); }
+
+/* A covered row: name + LHS stay as the cue, the answer is blurred until tapped. */
+.eq-row[role="button"] {
+  cursor: pointer;
+  /* Mobile: no 300ms delay, no double-tap zoom, no grey tap flash */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.eq-row[role="button"]:hover,
+.eq-row[role="button"]:focus-visible {
+  border-color: color-mix(in srgb, var(--imp) 50%, transparent);
+  outline: none;
+}
+.eq-row.eq-covered { background: color-mix(in srgb, var(--imp) 6%, var(--elevated)); }
+/* A covered row is one tap target: nothing inside it can be selected or hit, so
+   hidden text can't be highlighted and a tap on a mark still reveals the row.
+   (The `*` is needed — the app re-enables selection on every highlightable
+   descendant.) */
+.eq-row.eq-covered, .eq-row.eq-covered * {
+  user-select: none;
+  -webkit-user-select: none;
+}
+.eq-row.eq-covered * { pointer-events: none; }
+.eq-row.eq-covered .eq-rhs,
+.eq-row.eq-covered .eq-row-note {
+  filter: blur(9px);
+  opacity: 0.45;
+}
+
+/* ── Highlights ───────────────────────────────────── */
+/* A highlighted formula is marked as a whole; inline-block so the band covers a
+   fraction's full height instead of only the text line. */
+.hl-mark.eq-hl-formula {
+  display: inline-block;
+  max-width: 100%;
+  padding: 3px 8px;
+  margin: 0;
+  border-radius: 6px;
+}
+
+@media (max-width: 640px) {
+  /* Bigger blur so a short formula can't be guessed from its outline. */
+  .eq-row.eq-covered .eq-rhs,
+  .eq-row.eq-covered .eq-row-note { filter: blur(11px); }
+  .eq-card { padding: 12px; }
+}
