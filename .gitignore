@@ -1,0 +1,16 @@
+.gradle/
+build/
+app/build/
+.kotlin/
+local.properties
+.idea/
+*.iml
+captures/
+
+# Signing — never commit these
+keystore.properties
+*.jks
+*.keystore
+
+# Release artifacts are attached to GitHub releases, not tracked
+*.apk

@@ -1,0 +1,3 @@
+-keep class com.syed.anvil.** { *; }
+-keep class androidx.credentials.** { *; }
+-keep class com.google.android.libraries.identity.googleid.** { *; }
