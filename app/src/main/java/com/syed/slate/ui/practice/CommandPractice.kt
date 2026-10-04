@@ -94,7 +94,7 @@ private fun FlagChip(icon: ImageVector, label: String, on: Boolean, color: Color
 fun ImpWeakButtons(flag: Flag, uid: String, progress: ProgressRepository, modifier: Modifier = Modifier) {
     val p = LocalPalette.current
     HandMirror {
-        Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.Start), verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
             FlagChip(Icons.Filled.Bookmark, "Important", flag.important, p.imp) { progress.update(uid, FlagRules::toggleImportant) }
             if (flag.important) FlagChip(Icons.Filled.LocalFireDepartment, "Weak", flag.weak, p.warn) { progress.update(uid, FlagRules::toggleWeak) }
         }
