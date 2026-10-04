@@ -1,8 +1,8 @@
-// Pre-renders the web apps' formula pages into static HTML for Anvil's WebViews.
+// Pre-renders the web apps' formula pages into static HTML for Slate's WebViews.
 //
 //   node tools/prerender/build.mjs
 //
-// Needs the two web projects checked out next to Anvil (GENERAL_QUIZ / ICT_QUIZ override the paths), Node, and
+// Needs the two web projects checked out next to Slate (GENERAL_QUIZ / ICT_QUIZ override the paths), Node, and
 // Google Chrome. Output goes to app/src/main/assets and is committed, so building the app needs none of this.
 //
 // What it does:
@@ -22,7 +22,7 @@ const GQ = process.env.GENERAL_QUIZ || `${HOME}/Projects/Self/Quiz/general-quiz`
 const IQ = process.env.ICT_QUIZ || `${HOME}/Projects/Self/Quiz/ict-quiz`
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..')
 const OUT = `${ROOT}/app/src/main/assets`
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'anvil-prerender-'))
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'slate-prerender-'))
 const esbuild = createRequire(`${IQ}/package.json`)('esbuild')
 
 fs.mkdirSync(`${OUT}/web`, { recursive: true })

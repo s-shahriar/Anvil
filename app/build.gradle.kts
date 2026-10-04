@@ -11,15 +11,15 @@ val localProps = Properties().apply {
 }
 
 android {
-    namespace = "com.syed.anvil"
+    namespace = "com.syed.slate"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.syed.anvil"
+        applicationId = "com.syed.slate"
         minSdk = 31
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.1.1"
+        versionCode = 6
+        versionName = "0.3.0"
         // Web client IDs of the Google OAuth clients behind each Supabase project.
         // Empty until set in local.properties; sign-in is simply disabled then.
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID_GENERAL", "\"${localProps.getProperty("GOOGLE_WEB_CLIENT_ID_GENERAL", "")}\"")

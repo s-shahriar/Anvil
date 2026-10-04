@@ -1,5 +1,5 @@
 // Page glue for highlights in a pre-rendered page. Runs after the web's own textAnchor/highlightDom code above.
-// Anvil sends the saved highlights in (setHighlights) and hears about selections and taps on marks (Anvil.onSelection/onMark).
+// Slate sends the saved highlights in (setHighlights) and hears about selections and taps on marks (Slate.onSelection/onMark).
 var all = {};            // uid -> [highlight]
 var settleTimer = null;
 
@@ -33,10 +33,10 @@ window.clearSelection = function () { var s = window.getSelection(); if (s) s.re
 
 function report() {
   var sel = window.getSelection();
-  if (!sel || sel.isCollapsed || !sel.rangeCount) { if (window.Anvil && Anvil.onSelection) Anvil.onSelection(''); return; }
+  if (!sel || sel.isCollapsed || !sel.rangeCount) { if (window.Slate && Slate.onSelection) Slate.onSelection(''); return; }
   var node = sel.anchorNode && (sel.anchorNode.nodeType === 3 ? sel.anchorNode.parentElement : sel.anchorNode);
   var root = node && node.closest && node.closest('[data-hl-root]');
-  if (!root) { Anvil.onSelection(''); return; }
+  if (!root) { Slate.onSelection(''); return; }
   var anchors = selectionToAnchors(sel).map(function (a) {
     if (/\.formula$/.test(a.block)) {                    // a formula is marked whole
       var el = root.querySelector('[data-hl-block="' + a.block.replace(/"/g, '\\"') + '"]');
@@ -45,8 +45,8 @@ function report() {
     }
     return a;
   });
-  if (!anchors.length) { Anvil.onSelection(''); return; }
-  Anvil.onSelection(JSON.stringify({ uid: root.getAttribute('data-hl-root'), anchors: anchors }));
+  if (!anchors.length) { Slate.onSelection(''); return; }
+  Slate.onSelection(JSON.stringify({ uid: root.getAttribute('data-hl-root'), anchors: anchors }));
 }
 
 document.addEventListener('selectionchange', function () {
@@ -57,8 +57,8 @@ document.addEventListener('selectionchange', function () {
 // Tapping a mark offers recolour / remove for it.
 document.addEventListener('click', function (e) {
   var mark = e.target.closest && e.target.closest('.hl-mark');
-  if (!mark || !window.Anvil || !Anvil.onMark) return;
+  if (!mark || !window.Slate || !Slate.onMark) return;
   var root = mark.closest('[data-hl-root]');
   if (!root) return;
-  Anvil.onMark(JSON.stringify({ uid: root.getAttribute('data-hl-root'), ids: mark.getAttribute('data-hl-ids').split(','), color: mark.getAttribute('data-hl-color') }));
+  Slate.onMark(JSON.stringify({ uid: root.getAttribute('data-hl-root'), ids: mark.getAttribute('data-hl-ids').split(','), color: mark.getAttribute('data-hl-color') }));
 }, true);

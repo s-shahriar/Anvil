@@ -80,13 +80,13 @@
   scrollbar-width: thin;
   scrollbar-color: var(--border-md) transparent;
 }
-/* Below ~560px the labels would shrink past readable, so the diagram keeps its
-   size and scrolls sideways instead. */
+/* The diagram fills the card edge to edge on the phone — the web's 560px floor and
+   720px cap assume a desktop column and leave ugly centred gutters at 480dp. */
 .eq-diagram svg {
   display: block;
   width: 100%;
-  min-width: 560px;
-  max-width: 720px;
+  min-width: 0;
+  max-width: 100%;
   height: auto;
   margin: 0 auto;
   font-family: var(--font-body);

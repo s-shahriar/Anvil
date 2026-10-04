@@ -1,5 +1,5 @@
 /* Drives a pre-rendered formula page. Everything is rendered "covered" once; this switches cover mode on and off,
-   reveals one covered element per tap, and talks to Anvil (stars, current section). */
+   reveals one covered element per tap, and talks to Slate (stars, current section). */
 (function () {
   var init = window.__init || {};
   var cover = !!init.cover;
@@ -53,7 +53,7 @@
     if (star) {
       var card = star.closest('.mf-card');
       var uid = card && card.getAttribute('data-uid');
-      if (uid && window.Anvil) window.Anvil.toggleImportant(uid);
+      if (uid && window.Slate) window.Slate.toggleImportant(uid);
       e.preventDefault();
       return;
     }
@@ -69,15 +69,15 @@
     window.setCover(cover);
     window.setImportant(init.important || []);
     window.setImportantOnly(!!init.importantOnly);
-    // Tell Anvil which section is under the top of the page, so its chip row can follow.
+    // Tell Slate which section is under the top of the page, so its chip row can follow.
     var secs = document.querySelectorAll('.mf-section, .eq-group');
-    if ('IntersectionObserver' in window && window.Anvil && window.Anvil.onSection) {
+    if ('IntersectionObserver' in window && window.Slate && window.Slate.onSection) {
       var obs = new IntersectionObserver(function (entries) {
-        entries.forEach(function (en) { if (en.isIntersecting) window.Anvil.onSection(en.target.id); });
+        entries.forEach(function (en) { if (en.isIntersecting) window.Slate.onSection(en.target.id); });
       }, { rootMargin: '-10% 0px -75% 0px' });
       for (var i = 0; i < secs.length; i++) obs.observe(secs[i]);
     }
-    if (window.Anvil && window.Anvil.onReady) window.Anvil.onReady();
+    if (window.Slate && window.Slate.onReady) window.Slate.onReady();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();

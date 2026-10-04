@@ -4,12 +4,13 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Anvil: horn on the left, flat face, narrow waist, wide foot. -->
+    <!-- Slate: a solid board with a bold tick knocked out of it, and a chalk tray. One silhouette, so it also works
+         as the themed (monochrome) icon and tinted on the home screen. -->
     <path
         android:fillColor="#FDFAF6"
-        android:pathData="M20,47 L42,40 H84 V52 H70 C66,54 64,58 64,62 V68 L74,74 V80 H34 V74 L44,68 V62 C44,58 42,54 38,52 Z" />
-    <!-- Spark. -->
+        android:fillType="evenOdd"
+        android:pathData="M32,24 H76 A8,8 0 0 1 84,32 V64 A8,8 0 0 1 76,72 H32 A8,8 0 0 1 24,64 V32 A8,8 0 0 1 32,24 Z M33.2,54.8 L38.8,49.2 L47,57.4 L69.2,35.2 L74.8,40.8 L47,68.7 Z" />
     <path
         android:fillColor="#FDFAF6"
-        android:pathData="M70,22 L72,27 L77,29 L72,31 L70,36 L68,31 L63,29 L68,27 Z" />
+        android:pathData="M37,77 H71 A3,3 0 0 1 71,83 H37 A3,3 0 0 1 37,77 Z" />
 </vector>
