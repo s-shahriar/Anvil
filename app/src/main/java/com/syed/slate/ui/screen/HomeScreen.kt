@@ -107,12 +107,7 @@ private fun ModuleCard(vm: SlateViewModel, id: ModuleId, dark: Boolean, onClick:
                 }
                 Spacer(Modifier.weight(1f))
                 Text(id.title, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onSurface)
-                Text(
-                    if (id == ModuleId.GENERAL) "বাংলা, English ও সাধারণ জ্ঞান Practice"
-                    else "Master Information & Communication Technology",
-                    style = MaterialTheme.typography.bodyMedium, color = p.text3,
-                )
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
                 when (val s = state) {
                     is ContentState.Ready -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Box(Modifier.size(7.dp).clip(CircleShape).background(p.ok))
