@@ -98,8 +98,8 @@ into the WebView (blocks are already tagged `data-hl-block`).
   topics; system Back / top-bar Back returns to the grid). General's Written card opens the Data page. The earlier pill
   switcher (and wrapped chips / dropdown variants) was replaced at the user's request; don't bring them back.
 - **Home module cards**: two tall Magpie-style cards (230dp, 32dp radius, 68dp icon coin, title + tagline, offline status).
-- **Reading text is the system stack, NOT Jakarta** (`Type.kt`): bodyLarge 17/30, bodyMedium 15/27 (+0.2sp), bodySmall
-  12/20 — the web's `--font-body` is Inter and Jakarta (its `--font-display`) reads cramped as body copy. Sizes/leading
+- **Reading text is Inter (bundled `res/font/inter_*.ttf`), NOT Jakarta** (`Type.kt`): zero tracking, bodyLarge 17/30, bodyMedium 15.7/29, bodySmall 13/21;
+  Bangla falls back to system Noto Sans Bengali. Jakarta (the web's `--font-display`) reads cramped as body copy. Sizes/leading
   mirror the web's reading rules (question ~1.1rem/1.75, points ~0.98rem/1.85). HTML paragraph gap 10dp (`.rich p`).
   Written cards: 7dp glowing dots, sub-points as 2dp 40%-alpha left bars + 88% text, সংক্ষেপ card with topic-colour
   border + hairline separators. Equation diagrams fill the card (`equation.css`, no 560px floor/720px cap).
