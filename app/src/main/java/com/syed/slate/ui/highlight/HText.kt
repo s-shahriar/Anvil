@@ -38,6 +38,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -48,6 +49,7 @@ import androidx.compose.ui.platform.TextToolbar
 import androidx.compose.ui.platform.TextToolbarStatus
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -91,6 +93,35 @@ private object NoTextToolbar : TextToolbar {
     override val status: TextToolbarStatus = TextToolbarStatus.Hidden
     override fun hide() {}
     override fun showMenu(rect: Rect, onCopyRequested: (() -> Unit)?, onPasteRequested: (() -> Unit)?, onCutRequested: (() -> Unit)?, onSelectAllRequested: (() -> Unit)?) {}
+    // Compose 1.9 also calls this overload (with Autofill); left to its default it can still raise the system bubble.
+    override fun showMenu(rect: Rect, onCopyRequested: (() -> Unit)?, onPasteRequested: (() -> Unit)?, onCutRequested: (() -> Unit)?, onSelectAllRequested: (() -> Unit)?, onAutofillRequested: (() -> Unit)?) {}
+}
+
+/**
+ * Compose 1.9 raises the system's selection bubble (Translate / Copy / Select all, which also reads the clipboard and
+ * makes Android announce "Slate pasted from your clipboard") through its own context-menu provider, not [LocalTextToolbar].
+ * This one never shows anything and just stays "open" until the selection ends.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private object NoContextMenu : androidx.compose.foundation.text.contextmenu.provider.TextContextMenuProvider {
+    override suspend fun showTextContextMenu(dataProvider: androidx.compose.foundation.text.contextmenu.provider.TextContextMenuDataProvider) {
+        kotlinx.coroutines.awaitCancellation()
+    }
+}
+
+/**
+ * Selecting text makes Compose's text field peek at the clipboard (to decide whether a Paste option exists). Android 12+ then
+ * tells the user "Slate pasted from your clipboard". Highlightable text is read-only and never offers Paste, so it gets a
+ * clipboard whose contents cannot be read; writing (Copy in Slate's own bar) still works.
+ */
+private class BlindClipboard(private val real: androidx.compose.ui.platform.Clipboard) : androidx.compose.ui.platform.Clipboard by real {
+    override suspend fun getClipEntry(): androidx.compose.ui.platform.ClipEntry? = null
+}
+
+@Suppress("DEPRECATION")
+private class BlindClipboardManager(private val real: ClipboardManager) : ClipboardManager by real {
+    override fun getText(): AnnotatedString? = null
+    override fun hasText(): Boolean = false
 }
 
 /** Wraps a module's screens: provides the highlight controller and draws the colour bar over the content. */
@@ -100,7 +131,7 @@ fun HighlightHost(repo: HighlightRepository, content: @Composable () -> Unit) {
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     controller.endSelection = { focus.clearFocus() }
     val clipboard = LocalClipboardManager.current
-    CompositionLocalProvider(LocalHighlights provides controller, LocalTextToolbar provides NoTextToolbar) {
+    CompositionLocalProvider(LocalHighlights provides controller, LocalTextToolbar provides NoTextToolbar, androidx.compose.foundation.text.contextmenu.provider.LocalTextContextMenuToolbarProvider provides NoContextMenu) {
         Box(Modifier.fillMaxSize()) {
             content()
             val t = controller.target
@@ -184,7 +215,9 @@ fun HText(
         }
     }
     val resolved = style.copy(color = if (color != Color.Unspecified) color else LocalContentColor.current)
-    if (!editable || uid == null || ctl == null) { Text(annotated, modifier, style = resolved, softWrap = softWrap); return }
+    val layoutState = remember { mutableStateOf<TextLayoutResult?>(null) }
+    val edges = Modifier.markEdges({ layoutState.value }, shown, dark)
+    if (!editable || uid == null || ctl == null) { Text(annotated, modifier.then(edges), style = resolved, softWrap = softWrap, onTextLayout = { layoutState.value = it }); return }
 
     val owner = remember { Any() }
     var tfv by remember(annotated) { mutableStateOf(TextFieldValue(annotated)) }
@@ -193,7 +226,14 @@ fun HText(
     var clearJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     // Applied right at the field, so the system's own copy/translate bubble never competes with Slate's colour bar.
-    CompositionLocalProvider(LocalTextToolbar provides NoTextToolbar) {
+    val realClipboard = androidx.compose.ui.platform.LocalClipboard.current
+    val realManager = LocalClipboardManager.current
+    CompositionLocalProvider(
+        LocalTextToolbar provides NoTextToolbar,
+        androidx.compose.foundation.text.contextmenu.provider.LocalTextContextMenuToolbarProvider provides NoContextMenu,
+        androidx.compose.ui.platform.LocalClipboard provides remember(realClipboard) { BlindClipboard(realClipboard) },
+        LocalClipboardManager provides remember(realManager) { BlindClipboardManager(realManager) },
+    ) {
     BasicTextField(
         value = tfv,
         onValueChange = { nv ->
@@ -231,10 +271,34 @@ fun HText(
                 }
             }
         },
-        readOnly = true, textStyle = resolved, cursorBrush = SolidColor(Color.Transparent), modifier = modifier,
+        readOnly = true, textStyle = resolved, cursorBrush = SolidColor(Color.Transparent), modifier = modifier.then(edges),
+        onTextLayout = { layoutState.value = it },
     )
     }
 }
+
+/**
+ * The web's marks have a solid bar under the tint in the swatch's stronger edge colour (`box-shadow: inset 0 -.13em`), which
+ * makes them read at a glance. A text background alone cannot draw that, so the bar is painted from the text layout:
+ * one strip per line of each marked range, just under the baseline.
+ */
+private fun Modifier.markEdges(layout: () -> TextLayoutResult?, ranges: List<Triple<Int, Int, com.syed.slate.highlight.Band>>, dark: Boolean): Modifier =
+    if (ranges.isEmpty()) this else drawBehind {
+        val l = layout() ?: return@drawBehind
+        val len = l.layoutInput.text.length
+        val bar = 2.dp.toPx(); val drop = 2.5.dp.toPx()
+        for ((s, e, b) in ranges) {
+            val end = e.coerceAtMost(len)
+            if (end <= s || s >= len) continue
+            val edge = (if (dark) Highlights.dark(b.color) else Highlights.light(b.color)).edge
+            val first = l.getLineForOffset(s); val last = l.getLineForOffset(end - 1)
+            for (ln in first..last) {
+                val left = if (ln == first) l.getHorizontalPosition(s, true) else l.getLineLeft(ln)
+                val right = if (ln == last) l.getHorizontalPosition(end, true) else l.getLineRight(ln)
+                drawRect(edge, androidx.compose.ui.geometry.Offset(minOf(left, right), l.getLineBaseline(ln) + drop), androidx.compose.ui.geometry.Size(kotlin.math.abs(right - left), bar))
+            }
+        }
+    }
 
 /** An HTML block (General's question or explanation): paragraphs and images, with highlights spanning them as the web does. */
 @Composable

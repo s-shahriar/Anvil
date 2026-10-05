@@ -47,6 +47,8 @@ class HighlightRepository(
     /** Deleted on this device, not yet on the server; the highlight itself is kept so the delete can be undone. */
     private val deleted = LinkedHashMap<String, Highlight>()
     private val edits = LinkedHashMap<String, String>()
+    /** Deletes an older build saved as bare ids; they still go out, they just cannot be undone. Declared before `init`, which fills it. */
+    private val legacyDeletes = LinkedHashSet<String>()
     /** The colour a pending recolour started from, so undoing it can cancel the edit instead of queueing another. */
     private val editFrom = HashMap<String, String>()
     private val stamps = HashMap<String, Long>()
@@ -81,8 +83,6 @@ class HighlightRepository(
         publish()
         if (pending() > 0) kick()
     }
-
-    private val legacyDeletes = LinkedHashSet<String>()
 
     private fun pending() = addIds.size + deleted.size + legacyDeletes.size + edits.size
 

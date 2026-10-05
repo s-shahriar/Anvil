@@ -84,7 +84,23 @@
     if (st) st.classList.toggle('mf-revealed');
   }, true);
 
+  // The diagrams are drawn on a fixed canvas with generous blank margins (right for a desktop column). On a phone that
+  // empty space is just wasted card width, so each one is cropped to its real content plus a small margin.
+  function cropDiagrams() {
+    var svgs = document.querySelectorAll('.eq-diagram svg');
+    for (var i = 0; i < svgs.length; i++) {
+      var svg = svgs[i];
+      try {
+        var b = svg.getBBox();
+        if (!(b.width > 40 && b.height > 40)) continue;
+        var pad = 8;
+        svg.setAttribute('viewBox', (b.x - pad) + ' ' + (b.y - pad) + ' ' + (b.width + 2 * pad) + ' ' + (b.height + 2 * pad));
+      } catch (e) { /* not laid out: keep the original canvas */ }
+    }
+  }
+
   function start() {
+    cropDiagrams();
     collect();
     window.setCover(cover);
     window.setImportant(init.important || []);

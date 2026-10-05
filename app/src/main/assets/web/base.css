@@ -6,13 +6,15 @@
 @font-face { font-family: 'Inter'; src: url(fonts/inter_medium.ttf); font-weight: 500; }
 @font-face { font-family: 'Inter'; src: url(fonts/inter_semibold.ttf); font-weight: 600 700; }
 @font-face { font-family: 'JetBrains Mono'; src: url(fonts/jetbrains_mono_regular.ttf); font-weight: 400; }
-* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+/* The same global reset the web apps start from (index.css). Without it headings, paragraphs and figures keep the browser's
+   default margins and the pages come out with big gaps the web does not have. */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
 body { font-family: var(--font-body); font-size: 15px; line-height: 1.6; -webkit-text-size-adjust: 100%; }
 button { font-family: inherit; }
 /* The web page's own top bar and pickers are native in Slate. */
 .mf-wrap { padding: 8px 10px 56px; }
-.eq-page { padding: 8px 10px 56px; }
+.eq-page { padding: 4px 6px 56px; }
 .mf-imp-btn svg { fill: none; }
 .mf-imp-btn.on svg { fill: currentColor; }
 /* Highlights painted by highlight.js (colours come from the --hl-* variables). */

@@ -37,7 +37,7 @@
 
 /* ── Group ────────────────────────────────────────── */
 .eq-group {
-  margin-bottom: 36px;
+  margin-bottom: 22px;
   scroll-margin-top: 84px;
 }
 .eq-group-head {
@@ -68,13 +68,14 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 16px;
+  padding: 10px 8px;
   box-shadow: var(--shadow-sm);
   min-width: 0;
 }
 
 /* ── Diagram ──────────────────────────────────────── */
-.eq-diagram { margin-bottom: 14px; }
+/* <figure> brings the browser's 40px side / 1em top margins; the web app resets them globally, this page did not. */
+.eq-diagram { margin: 0 0 12px; }
 .eq-diagram-scroll {
   overflow-x: auto;
   scrollbar-width: thin;
@@ -85,7 +86,7 @@
 .eq-diagram svg {
   display: block;
   width: 100%;
-  min-width: 680px;
+  min-width: 560px;
   max-width: 760px;
   height: auto;
   margin: 0 auto;

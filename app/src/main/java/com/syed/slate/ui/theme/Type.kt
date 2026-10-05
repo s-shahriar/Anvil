@@ -43,9 +43,10 @@ val SlateType = Typography(
     titleMedium = s(FontWeight.SemiBold, 16, 22),
     titleSmall = s(FontWeight.Medium, 14, 20),
     // Reading text is Inter with normal tracking, like the web's --font-body: question ~1.06rem/1.7,
-    // points ~0.98rem/1.85. Never negative letter-spacing on body copy.
-    bodyLarge = s(FontWeight.Normal, 17, 30, 0.0, Inter),
-    bodyMedium = s(FontWeight.Normal, 15.7, 29, 0.0, Inter),
+    // points ~0.98rem/1.85. Never negative letter-spacing on body copy. Medium weight: Regular reads thin on a phone
+    // next to the web (especially the system's Bangla fallback), and legibility beats lightness here.
+    bodyLarge = s(FontWeight.Medium, 17, 30, 0.0, Inter),
+    bodyMedium = s(FontWeight.Medium, 16, 29, 0.0, Inter),
     bodySmall = s(FontWeight.Normal, 13, 21, 0.0, Inter),
     labelLarge = s(FontWeight.SemiBold, 14, 18, 0.0, Inter),
     labelMedium = s(FontWeight.Medium, 12, 16, 0.2, Inter),
