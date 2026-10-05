@@ -75,7 +75,8 @@ private val tabs = listOf("Info", "Commands", "Practice")
 @Composable
 fun PracticeScreen(vm: SlateViewModel, categoryId: String, onBack: () -> Unit) {
     val app = LocalContext.current.applicationContext as SlateApp
-    val cat = app.practice.firstOrNull { it.id == categoryId } ?: return
+    val blobVer by app.module(ModuleId.ICT).blobs.version.collectAsState()
+    val cat = remember(blobVer) { app.practice }.firstOrNull { it.id == categoryId } ?: return
     val m = vm.module(ModuleId.ICT)
     val flags by m.progress.flags.collectAsState()
     var topicId by rememberSaveable { mutableStateOf(cat.topics.first().id) }
@@ -212,7 +213,8 @@ fun PracticeImportantScreen(vm: SlateViewModel, onBack: () -> Unit) {
     val app = LocalContext.current.applicationContext as SlateApp
     val m = vm.module(ModuleId.ICT)
     val flags by m.progress.flags.collectAsState()
-    val all = remember { app.practice.flatMap { c -> c.topics.flatMap { t -> Practice.drillsFor(c, t, tag = true) } } }
+    val blobVer by app.module(ModuleId.ICT).blobs.version.collectAsState()
+    val all = remember(blobVer) { app.practice.flatMap { c -> c.topics.flatMap { t -> Practice.drillsFor(c, t, tag = true) } } }
     // Items un-marked mid-drill drop out of the list, as on the web.
     val drills = all.filter { QuizPool.matches(PoolSet.IMPORTANT, flags[it.id]) }
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {

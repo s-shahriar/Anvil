@@ -4,6 +4,7 @@ import android.content.Context
 import com.syed.slate.BuildConfig
 import com.syed.slate.backend.Http
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
@@ -56,13 +57,33 @@ class UpdateService(private val context: Context) {
         )
     }
 
-    /** Resumes a partial file where it can, verifies size (and checksum when published), returns the APK. */
-    suspend fun download(info: UpdateInfo, onProgress: (DownloadProgress) -> Unit): File = withContext(Dispatchers.IO) {
+    /**
+     * Downloads the APK, resuming a partial file and retrying (also resuming) when a mobile connection drops, then
+     * verifies size and, when published, the checksum. [onVerifying] fires once the bytes are in, before the hash runs.
+     */
+    suspend fun download(info: UpdateInfo, onProgress: (DownloadProgress) -> Unit, onVerifying: () -> Unit = {}): File = withContext(Dispatchers.IO) {
         val url = info.downloadUrl ?: throw IllegalStateException("No download URL")
         val target = File(context.cacheDir, info.assetName ?: "$ASSET_PREFIX-update.apk")
+        // Fetched up front (tiny), so nothing waits on the network once the bytes are in.
+        val expected = fetchExpectedChecksum(url)
+        var attempt = 0
+        while (true) {
+            try { downloadOnce(url, target, onProgress); break }
+            catch (e: java.io.IOException) {
+                // A dropped connection keeps what was written; the next attempt asks for the rest.
+                if (++attempt >= MAX_ATTEMPTS) throw IllegalStateException("Connection lost — check your network and try again")
+                kotlinx.coroutines.delay(1_000L * attempt)
+            }
+        }
+        onVerifying()
+        verifyChecksum(expected, target)
+        target
+    }
+
+    private suspend fun downloadOnce(url: String, target: File, onProgress: (DownloadProgress) -> Unit) {
         val have = if (target.exists()) target.length() else 0L
         var c = open(url, have)
-        if (c.responseCode == 416) { // the cached file is already complete
+        if (c.responseCode == 416) { // the cached file is already complete (or stale): start clean
             c.disconnect(); target.delete(); c = open(url, 0L)
         }
         try {
@@ -72,10 +93,12 @@ class UpdateService(private val context: Context) {
             val total = c.contentLengthLong.takeIf { it > 0 }?.plus(start)
             var done = start
             var windowStart = System.currentTimeMillis(); var windowBytes = 0L; var speed = 0L; var lastReport = 0L
+            onProgress(DownloadProgress(done, total, 0))
             c.inputStream.use { input ->
                 FileOutputStream(target, resuming).use { out ->
-                    val buf = ByteArray(64 * 1024)
+                    val buf = ByteArray(256 * 1024)
                     while (true) {
+                        kotlin.coroutines.coroutineContext.ensureActive()
                         val n = input.read(buf); if (n < 0) break
                         out.write(buf, 0, n); done += n; windowBytes += n
                         val now = System.currentTimeMillis()
@@ -84,19 +107,22 @@ class UpdateService(private val context: Context) {
                     }
                 }
             }
-            if (total != null && target.length() < total) throw IllegalStateException("Download incomplete — try again")
+            // Short of the promised size is a cut connection, not a finished file.
+            if (total != null && target.length() < total) throw java.io.IOException("Download incomplete")
             onProgress(DownloadProgress(done, total, speed))
         } finally { c.disconnect() }
-        verifyChecksum(url, target)
-        target
     }
 
-    private fun verifyChecksum(apkUrl: String, file: File) {
-        val r = runCatching { Http.request("GET", "$apkUrl.sha256", mapOf("User-Agent" to "Slate"), timeoutMs = 10_000) }.getOrNull()
-        if (r == null || !r.ok) return // not published for this release
-        val expected = r.body.trim().split(Regex("\\s+")).firstOrNull()?.lowercase() ?: return
+    private fun fetchExpectedChecksum(apkUrl: String): String? {
+        val r = runCatching { Http.request("GET", "$apkUrl.sha256", mapOf("User-Agent" to "Slate"), timeoutMs = 5_000) }.getOrNull()
+        if (r == null || !r.ok) return null // not published for this release
+        return r.body.trim().split(Regex("\\s+")).firstOrNull()?.lowercase()?.takeIf { it.length == 64 }
+    }
+
+    private fun verifyChecksum(expected: String?, file: File) {
+        if (expected == null) return
         val md = MessageDigest.getInstance("SHA-256")
-        file.inputStream().use { s -> val b = ByteArray(64 * 1024); while (true) { val n = s.read(b); if (n < 0) break; md.update(b, 0, n) } }
+        file.inputStream().use { s -> val b = ByteArray(256 * 1024); while (true) { val n = s.read(b); if (n < 0) break; md.update(b, 0, n) } }
         val actual = md.digest().joinToString("") { "%02x".format(it) }
         if (actual != expected) { file.delete(); throw IllegalStateException("Checksum mismatch — the download was corrupted") }
     }
@@ -109,7 +135,7 @@ class UpdateService(private val context: Context) {
     private fun open(url: String, resumeFrom: Long): HttpURLConnection {
         val c = URL(url).openConnection() as HttpURLConnection
         c.instanceFollowRedirects = true
-        c.connectTimeout = 15_000; c.readTimeout = 60_000
+        c.connectTimeout = 15_000; c.readTimeout = 20_000
         c.setRequestProperty("User-Agent", "Slate")
         if (resumeFrom > 0) c.setRequestProperty("Range", "bytes=$resumeFrom-")
         return c
@@ -118,6 +144,7 @@ class UpdateService(private val context: Context) {
     companion object {
         const val REPO = "s-shahriar/Slate"
         const val ASSET_PREFIX = "Slate"
+        private const val MAX_ATTEMPTS = 4
         private const val FEED = "https://github.com/$REPO/releases.atom"
         private const val DOWNLOAD_BASE = "https://github.com/$REPO/releases/download"
         private val TAG_PATTERN = Regex("""href="[^"]*/releases/tag/([^"]+)"""")

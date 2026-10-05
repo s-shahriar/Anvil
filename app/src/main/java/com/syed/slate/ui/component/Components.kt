@@ -73,12 +73,20 @@ fun UpdateCard(vm: SlateViewModel, showWhenIdle: Boolean, modifier: Modifier = M
                     }
                 }
                 is UpdateState.Downloading -> {
-                    Text("Downloading update…", style = MaterialTheme.typography.titleMedium, color = ink)
-                    LinearProgressIndicator(progress = { s.progress.fraction }, modifier = Modifier.fillMaxWidth())
-                    Text(
-                        formatBytes(s.progress.bytesDownloaded) + (s.progress.totalBytes?.let { " / ${formatBytes(it)}" } ?: ""),
+                    val started = s.progress.bytesDownloaded > 0 || s.progress.totalBytes != null
+                    Text(if (started) "Downloading update…" else "Connecting…", style = MaterialTheme.typography.titleMedium, color = ink)
+                    if (started && s.progress.totalBytes != null) LinearProgressIndicator(progress = { s.progress.fraction }, modifier = Modifier.fillMaxWidth())
+                    else LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    if (started) Text(
+                        formatBytes(s.progress.bytesDownloaded) + (s.progress.totalBytes?.let { " / ${formatBytes(it)}" } ?: "") +
+                            (if (s.progress.bytesPerSecond > 0) " · ${formatBytes(s.progress.bytesPerSecond)}/s" else ""),
                         style = MaterialTheme.typography.bodySmall, color = ink,
                     )
+                    TextButton(onClick = vm::cancelDownload) { Text("Cancel") }
+                }
+                UpdateState.Verifying -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SlateLoaderInline(20.dp)
+                    Text("Verifying download…", color = ink)
                 }
                 is UpdateState.ReadyToInstall -> {
                     Text("Version ${s.info.latestVersion} is ready", style = MaterialTheme.typography.titleMedium, color = ink)

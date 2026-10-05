@@ -239,7 +239,9 @@ private fun ModuleBody(id: ModuleId, content: ModuleContent, flags: Map<String, 
     val inPractice = id == ModuleId.ICT && section == PRACTICE
     val inEquation = id == ModuleId.ICT && section == EQUATION
     val app = LocalContext.current.applicationContext as SlateApp
-    val equationTopics = remember { FormulaIndex.equationTopics(app) }
+    val blobVer by app.module(ModuleId.ICT).blobs.version.collectAsState()
+    val equationTopics = remember(blobVer) { FormulaIndex.equationTopics(app.module(ModuleId.ICT).blobs).map { it.first } }
+    val practiceCats = remember(blobVer) { app.practice }
     val practiceFlags = remember(flags) { flags.filter { it.key.startsWith("practice__") } }
     val group = content.groups.firstOrNull { it.key == section }
     val groupItems = remember(content, group) { group?.topics?.flatMap { content.items(group.key, it.slug) }.orEmpty().filter { it.isQuizzable || LongForm.isLongForm(it) } }
@@ -305,7 +307,7 @@ private fun ModuleBody(id: ModuleId, content: ModuleContent, flags: Map<String, 
                     }
                 }
             }
-            items(app.practice, key = { it.id }) { c ->
+            items(practiceCats, key = { it.id }) { c ->
                 Row(
                     Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).background(p.surface).clickable { nav.onPractice(c.id) }.padding(horizontal = 18.dp, vertical = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,

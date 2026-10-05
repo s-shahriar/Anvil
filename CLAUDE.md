@@ -70,10 +70,10 @@ Three scopes in `ui/theme/Palette.kt`: `SHELL` (rust, the Slate home/settings), 
    Equation is done too (`ui/web`, `FormulaScreens`): a virtual "Equation" group on ICT, cover-and-recall. Still to do: highlights.
 5. ✅ Highlights, recycle bin, left/right-hand layout. Next: mobile extras (reminders, streaks, spaced repetition, timed exams).
 
-## Pre-rendered pages (math formulas, equations, financial terms)
+## Pre-rendered pages (math formulas, equations) and `content_blobs`
 The web apps build these from JSX + KaTeX; Slate ships them as static HTML in `app/src/main/assets/web` and shows each in a
-script-light `WebView` (`ui/web/FormulaPage.kt`: no network, no file access, JS only for `controller.js`). Regenerate with
-`node tools/prerender/build.mjs` (needs the two web projects next to Slate, Node and Google Chrome; output is committed, so building
+script-light `WebView` (`ui/web/FormulaPage.kt`: no network, no file access, JS only for `controller.js`). Regenerate **and publish** with
+`node tools/prerender/build.mjs [--dry]` (needs the two web projects next to Slate, Node and Google Chrome; output is committed, so building
 the app needs none of it). The tool bundles the web components with esbuild (stubbing their app-only imports), renders them with cover mode
 forced ON, lets headless Chrome run the web's own uid code to tag each math card with `data-uid` (`m<hash>`), and copies KaTeX CSS/fonts.
 `controller.js` switches cover mode on/off, reveals one element per tap, and bridges stars to Slate. Theme tokens are injected from the
@@ -178,3 +178,18 @@ into the WebView (blocks are already tagged `data-hl-block`).
 - Unit tests cover uid hashing, flag rules/queue, HTML parsing, pools/search, updater helpers (27 tests).
 - Smoke-tested on the `Medium_Phone_API_36.1` emulator: download, offline relaunch in airplane mode, quiz, exam.
   Not yet exercised: Google sign-in and server sync (need the Google client IDs), image rendering, study/saved screens by hand.
+
+## Non-question content: `content_blobs` (single source, 2026-10-05)
+Each Supabase project has `content_blobs(kind, key, sort_order, payload jsonb, updated_at)`; public read, writes via service role,
+a trigger bumps `updated_at`. `content/BlobRepository` caches the whole table in `filesDir/blobs_<module>.json` and refreshes by an
+`updated_at` probe (only changed rows are fetched) on module open / the Refresh button. The UI reads only the cache; a first launch
+needs a connection (no bundled fallback). Kinds: ICT `practice`, `equation` (data, unused by Slate), `web/equation_<topic>`;
+General `utility/finance`, `web/math`. `web/*` rows are the rendered pages the prerender tool publishes (`FormulaIndex`).
+Nothing under `assets/practice`, `assets/utility` or the `*.body.html` files exists any more; only css/js/fonts are bundled.
+Authoring: Practice + equation data via `ict-quiz/scripts/sync-static.mjs`, finance via `general-quiz/scripts/sync-static.mjs`,
+rendered pages via the prerender tool. Slate's `equation.css`/`mathformulas.css` are adapted copies; the tool never overwrites them.
+
+## Updater notes
+`UpdateService.download` fetches the `.sha256` before the APK, resumes a partial file and retries (4 attempts, 20 s read timeout),
+and the card shows Connecting… / speed / Verifying…; `downloadUpdate` ignores a second tap while a job is active and Cancel keeps
+the partial file.

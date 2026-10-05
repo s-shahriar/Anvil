@@ -5,6 +5,7 @@ import com.syed.slate.backend.Backends
 import com.syed.slate.backend.ModuleId
 import com.syed.slate.backend.Postgrest
 import com.syed.slate.backend.SupabaseAuth
+import com.syed.slate.content.BlobRepository
 import com.syed.slate.content.ContentRepository
 import com.syed.slate.content.ImageStore
 import com.syed.slate.core.Connectivity
@@ -27,6 +28,8 @@ class ModuleServices(app: Application, val id: ModuleId, private val scope: Coro
 
     /** Pictures are fetched in the background so questions that use them still work offline; resumes if cut short. */
     fun prefetchImages(c: com.syed.slate.content.ModuleContent) { scope.launch { images.prefetch(imageUrls(c)) } }
+    /** Practice, equations, utility pages: small JSON rows from `content_blobs`, cached for offline use. */
+    val blobs = BlobRepository(app, id, db)
     val progress = ProgressRepository(app, id, auth, db, scope)
     val trash: com.syed.slate.trash.TrashRepository = com.syed.slate.trash.TrashRepository(app, id, auth, db, scope) { scope.launch { content.refresh() } }
 
@@ -43,8 +46,14 @@ class SlateApp : Application() {
     lateinit var images: ImageStore; private set
     private val modules = HashMap<ModuleId, ModuleServices>()
 
-    /** ICT » Practice: bundled with the app, loaded on first use. */
-    val practice: List<com.syed.slate.practice.Category> by lazy { com.syed.slate.practice.PracticeData.load { assets.open(it) } }
+    /** ICT » Practice, from the ICT project's `content_blobs` (parsed again only when the cache changes). */
+    val practice: List<com.syed.slate.practice.Category> get() {
+        val blobs = module(ModuleId.ICT).blobs
+        val v = blobs.version.value
+        practiceCache?.takeIf { it.first == v }?.let { return it.second }
+        return com.syed.slate.practice.PracticeData.fromBlobs(blobs).also { practiceCache = v to it }
+    }
+    private var practiceCache: Pair<Int, List<com.syed.slate.practice.Category>>? = null
 
     override fun onCreate() {
         super.onCreate()

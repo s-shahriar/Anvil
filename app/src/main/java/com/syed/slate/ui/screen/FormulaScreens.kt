@@ -52,27 +52,47 @@ import com.syed.slate.ui.theme.isDark
 import com.syed.slate.ui.web.FormulaPage
 import com.syed.slate.ui.web.PageKind
 import org.json.JSONArray
+import com.syed.slate.content.BlobRepository
 import org.json.JSONObject
 
 class MathSection(val id: String, val label: String, val icon: String, val color: String)
 class EquationGroup(val id: String, val title: String)
 class EquationTopic(val id: String, val groups: List<EquationGroup>, val equations: Int)
 
-/** The pre-rendered pages' small indexes, read from assets. */
+/** The pre-rendered pages and their small indexes, read from the cached `content_blobs` rows (kind `web`). */
 object FormulaIndex {
-    fun mathSections(ctx: android.content.Context): List<MathSection> =
-        JSONArray(ctx.assets.open("web/math.sections.json").bufferedReader().use { it.readText() }).let { a ->
+    fun mathPage(blobs: BlobRepository): JSONObject? = blobs.payload("web", "math")
+
+    fun mathSections(page: JSONObject): List<MathSection> =
+        page.getJSONArray("sections").let { a ->
             List(a.length()) { a.getJSONObject(it).let { o -> MathSection(o.getString("id"), o.getString("label"), o.optString("icon"), o.optString("color")) } }
         }
 
-    fun equationTopics(ctx: android.content.Context): List<EquationTopic> =
-        JSONArray(ctx.assets.open("web/equation.index.json").bufferedReader().use { it.readText() }).let { a ->
-            List(a.length()) { i ->
-                val o: JSONObject = a.getJSONObject(i)
-                val g = o.getJSONArray("groups")
-                EquationTopic(o.getString("id"), List(g.length()) { j -> EquationGroup(g.getJSONObject(j).getString("id"), g.getJSONObject(j).getString("title")) }, o.getInt("equations"))
-            }
+    fun equationTopics(blobs: BlobRepository): List<Pair<EquationTopic, String>> =
+        blobs.all("web").filter { it.first.startsWith("equation_") }.map { (_, o) ->
+            val g = o.getJSONArray("groups")
+            EquationTopic(o.getString("id"), List(g.length()) { j -> EquationGroup(g.getJSONObject(j).getString("id"), g.getJSONObject(j).getString("title")) }, o.getInt("equations")) to o.getString("html")
         }
+}
+
+/** Shown when a page's rows have not been downloaded yet (first launch without a connection). */
+@Composable
+private fun NotDownloaded(title: String, onBack: () -> Unit) {
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            SlateTopBar(
+                title = { BarTitle(title, style = MaterialTheme.typography.titleLarge) },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+            )
+        },
+    ) { pad ->
+        Column(Modifier.fillMaxSize().padding(pad).padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("এই পেজটি এখনো ডাউনলোড হয়নি।", style = MaterialTheme.typography.titleMedium)
+            Text("একবার ইন্টারনেটে যুক্ত হয়ে অ্যাপটি খুলুন, তারপর অফলাইনেও কাজ করবে।", Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodyMedium)
+        }
+    }
 }
 
 @Composable
@@ -91,11 +111,19 @@ private fun CoverBanner() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MathFormulasScreen(vm: SlateViewModel, onBack: () -> Unit) {
-    val ctx = LocalContext.current
+    val blobs = vm.module(ModuleId.GENERAL).blobs
+    val ver by blobs.version.collectAsState()
+    val page = remember(ver) { FormulaIndex.mathPage(blobs) }
+    if (page == null) NotDownloaded("গণিত সূত্র সংকলন", onBack) else MathFormulasContent(vm, page, onBack)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MathFormulasContent(vm: SlateViewModel, page: JSONObject, onBack: () -> Unit) {
     val m = vm.module(ModuleId.GENERAL)
     val flags by m.progress.flags.collectAsState()
     val p = LocalPalette.current
-    val sections = remember { FormulaIndex.mathSections(ctx) }
+    val sections = remember(page) { FormulaIndex.mathSections(page) }
     var cover by remember { mutableStateOf(vm.boolPref("mf-cover")) }
     var importantOnly by remember { mutableStateOf(false) }
     var active by remember { mutableStateOf(sections.first().id) }
@@ -137,7 +165,7 @@ fun MathFormulasScreen(vm: SlateViewModel, onBack: () -> Unit) {
             if (cover) CoverBanner()
             Box(Modifier.fillMaxSize()) {
                 FormulaPage(
-                    PageKind.MATH, "web/math.body.html", p, p.isDark, cover,
+                    PageKind.MATH, page.getString("html"), p, p.isDark, cover,
                     importantOnly = importantOnly, important = important, scrollTo = target, scrollNonce = nonce,
                     onToggleImportant = { uid -> m.progress.update(uid, FlagRules::toggleImportant) },
                     onSection = { active = it },
@@ -158,9 +186,16 @@ private fun LocalContentColorFallback(): Color = androidx.compose.material3.Loca
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EquationScreen(vm: SlateViewModel, topicId: String, onBack: () -> Unit) {
-    val ctx = LocalContext.current
+    val blobs = vm.module(ModuleId.ICT).blobs
+    val ver by blobs.version.collectAsState()
+    val found = remember(ver, topicId) { FormulaIndex.equationTopics(blobs).firstOrNull { it.first.id == topicId } }
+    if (found == null) NotDownloaded("Equations", onBack) else EquationContent(vm, found.first, found.second, onBack)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EquationContent(vm: SlateViewModel, topic: EquationTopic, html: String, onBack: () -> Unit) {
     val p = LocalPalette.current
-    val topic = remember(topicId) { FormulaIndex.equationTopics(ctx).first { it.id == topicId } }
     var cover by remember { mutableStateOf(vm.boolPref("ict-eq-cover")) }
     var active by remember { mutableStateOf("eq-${topic.groups.first().id}") }
     var target by remember { mutableStateOf<String?>(null) }
@@ -194,7 +229,7 @@ fun EquationScreen(vm: SlateViewModel, topicId: String, onBack: () -> Unit) {
             val owner = remember { Any() }
             var clearNonce by remember { mutableIntStateOf(0) }
             FormulaPage(
-                PageKind.EQUATION, "web/equation_${topic.id}.body.html", p, p.isDark, cover,
+                PageKind.EQUATION, html, p, p.isDark, cover,
                 scrollTo = target, scrollNonce = nonce, onSection = { active = it },
                 highlights = onPage, clearSelectionNonce = clearNonce,
                 onSelection = { uid, anchors ->

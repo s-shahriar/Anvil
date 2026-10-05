@@ -2,9 +2,8 @@ package com.syed.slate.practice
 
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.InputStream
 
-/** ICT » Practice: Linux and SQL command drills. Bundled with the app (they are not in the database). */
+/** ICT » Practice: Linux and SQL command drills, from the ICT project's `content_blobs` (kind `practice`). */
 class TableData(val columns: List<String>, val rows: List<List<Any?>>)
 typealias SampleTables = Map<String, TableData>
 
@@ -33,9 +32,9 @@ class Category(
 class Drill(val problem: Problem, val id: String, val caseInsensitive: Boolean, val tag: String?, val sample: SampleTables?)
 
 object PracticeData {
-    private val order = listOf("linux", "sql")
+    fun fromBlobs(blobs: com.syed.slate.content.BlobRepository): List<Category> = parse(blobs.all("practice").map { it.second })
 
-    fun load(open: (String) -> InputStream): List<Category> = order.map { parseCategory(JSONObject(open("practice/$it.json").bufferedReader().use { r -> r.readText() })) }
+    fun parse(payloads: List<JSONObject>): List<Category> = payloads.map(::parseCategory)
 
     private fun strings(a: JSONArray?): List<String> = a?.let { List(it.length()) { i -> it.optString(i) } }.orEmpty()
 

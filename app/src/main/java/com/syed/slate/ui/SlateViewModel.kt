@@ -33,6 +33,7 @@ sealed interface UpdateState {
     data class UpToDate(val version: String) : UpdateState
     data class Available(val info: UpdateInfo) : UpdateState
     data class Downloading(val progress: DownloadProgress) : UpdateState
+    data object Verifying : UpdateState
     data class ReadyToInstall(val file: File, val info: UpdateInfo) : UpdateState
     data class NeedsPermission(val file: File, val info: UpdateInfo) : UpdateState
     data class Failed(val message: String) : UpdateState
@@ -86,6 +87,8 @@ class SlateViewModel(private val app: Application) : AndroidViewModel(app) {
             val outdated = ((m.content.state.value as? ContentState.Ready)?.content?.version ?: 0) < CACHE_VERSION
             if (m.content.state.value is ContentState.Empty || outdated) m.content.refresh()
         }
+        // Practice / utility rows: a cheap probe, fetches only what changed.
+        if (online.value) launch { m.blobs.refresh() }
         // A download that was cut short (app closed, connection lost) is topped up here.
         if (online.value) (m.content.state.value as? ContentState.Ready)?.let { m.prefetchImages(it.content) }
         if (m.auth.session.value != null) { runCatching { m.progress.pull() }; runCatching { m.highlights.pull() } }
@@ -93,7 +96,7 @@ class SlateViewModel(private val app: Application) : AndroidViewModel(app) {
 
     val imagesSaved get() = slate.images.cachedCount
 
-    fun refreshContent(id: ModuleId) = viewModelScope.launch { slate.module(id).content.refresh() }
+    fun refreshContent(id: ModuleId) = viewModelScope.launch { launch { slate.module(id).blobs.refresh() }; slate.module(id).content.refresh() }
     fun clearContent(id: ModuleId) = viewModelScope.launch { slate.module(id).content.clear() }
 
     // ── accounts ─────────────────────────────────────────────────────────
@@ -144,12 +147,23 @@ class SlateViewModel(private val app: Application) : AndroidViewModel(app) {
         }
     }
 
+    private var downloadJob: kotlinx.coroutines.Job? = null
+
     fun downloadUpdate(info: UpdateInfo) {
-        viewModelScope.launch {
-            runCatching { slate.updates.download(info) { update = UpdateState.Downloading(it) } }
+        if (downloadJob?.isActive == true) return // a second tap must not start a second writer on the same file
+        // Show it at once: connecting can take seconds on a slow link, and silence reads as a frozen app.
+        update = UpdateState.Downloading(DownloadProgress(0, null, 0))
+        downloadJob = viewModelScope.launch {
+            runCatching { slate.updates.download(info, { update = UpdateState.Downloading(it) }, { update = UpdateState.Verifying }) }
                 .onSuccess { update = UpdateState.ReadyToInstall(it, info) }
-                .onFailure { update = UpdateState.Failed(it.message ?: "Download failed") }
+                .onFailure { if (it !is kotlinx.coroutines.CancellationException) update = UpdateState.Failed(it.message ?: "Download failed") }
         }
+    }
+
+    /** Stops a running download; the partial file is kept, so the next Download resumes from it. */
+    fun cancelDownload() {
+        downloadJob?.cancel(); downloadJob = null
+        update = UpdateState.Idle
     }
 
     /** Opens the system installer, first sending the user to the "install unknown apps" switch if needed. */

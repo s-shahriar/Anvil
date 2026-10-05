@@ -56,11 +56,8 @@ internal fun themeVariables(p: Palette, dark: Boolean): String = buildString {
     append("}")
 }
 
-private fun Context.assetText(path: String) = assets.open(path).bufferedReader().use { it.readText() }
-
 /** Joins the stylesheets, the pre-rendered body and the start-up state into one page. */
-private fun buildPage(ctx: Context, kind: PageKind, bodyAsset: String, p: Palette, dark: Boolean, cover: Boolean, important: Set<String>, importantOnly: Boolean): String {
-    val body = ctx.assetText(bodyAsset)
+private fun buildPage(kind: PageKind, body: String, p: Palette, dark: Boolean, cover: Boolean, important: Set<String>, importantOnly: Boolean): String {
     val init = """window.__init={cover:$cover,importantOnly:$importantOnly,important:${JSONArray(important.toList())}};"""
     return buildString(body.length + 4096) {
         append("""<!doctype html><html data-theme="${if (dark) "dark" else "light"}"><head><meta charset="utf-8">""")
@@ -98,7 +95,8 @@ private class Bridge(
 @Composable
 fun FormulaPage(
     kind: PageKind,
-    bodyAsset: String,
+    /** The page's pre-rendered markup, from the database (`content_blobs`, kind `web`). */
+    body: String,
     palette: Palette,
     dark: Boolean,
     cover: Boolean,
@@ -120,8 +118,8 @@ fun FormulaPage(
     val ctx = LocalContext.current
     // Rebuilt only when the theme changes; cover and stars are switched live through the page's own script.
     val initial = remember { mutableStateOf(Triple(cover, importantOnly, important)) }
-    val html by produceState<String?>(null, kind, bodyAsset, palette, dark) {
-        value = withContext(Dispatchers.IO) { buildPage(ctx, kind, bodyAsset, palette, dark, initial.value.first, initial.value.third, initial.value.second) }
+    val html by produceState<String?>(null, kind, body, palette, dark) {
+        value = withContext(Dispatchers.IO) { buildPage(kind, body, palette, dark, initial.value.first, initial.value.third, initial.value.second) }
     }
     var ready by remember(html) { mutableStateOf(false) }
     val toggle = rememberUpdatedState(onToggleImportant)

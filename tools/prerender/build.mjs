@@ -1,15 +1,20 @@
-// Pre-renders the web apps' formula pages into static HTML for Slate's WebViews.
+// Pre-renders the web apps' formula pages (math formulas, equations) and PUBLISHES them to Supabase, so Slate reads one
+// copy instead of a bundled one: an edit in a web project reaches Slate with `node tools/prerender/build.mjs`, no APK.
 //
-//   node tools/prerender/build.mjs
+//   node tools/prerender/build.mjs [--dry]
 //
-// Needs the two web projects checked out next to Slate (GENERAL_QUIZ / ICT_QUIZ override the paths), Node, and
-// Google Chrome. Output goes to app/src/main/assets and is committed, so building the app needs none of this.
+// Needs the two web projects checked out next to Slate (GENERAL_QUIZ / ICT_QUIZ override the paths), Node, Google Chrome,
+// and each web project's SUPABASE_SERVICE_ROLE_KEY in its .env.local. Rows go to `content_blobs` (kind `web`):
+//   general / web/math               { sections, html }
+//   ict     / web/equation_<topic>   { id, groups, equations, html }
+// Static support files (KaTeX css + fonts, the page stylesheets and scripts) are code, not content: they are still written to
+// app/src/main/assets/web and ship with the app.
 //
 // What it does:
 //  1. bundles the web components with esbuild (stubbing their app-only imports) and renders them to static markup, with
 //     cover mode forced ON so every coverable element carries its "covered" class (a controller script turns it on/off);
 //  2. lets headless Chrome run the web's own uid logic over the markup, so each Important-able card gets data-uid;
-//  3. writes the financial-terms data as JSON, and copies KaTeX's CSS (woff2 only) and fonts.
+//  3. uploads the markup, and copies KaTeX's CSS/fonts and the page stylesheets.
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -26,7 +31,10 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'slate-prerender-'))
 const esbuild = createRequire(`${IQ}/package.json`)('esbuild')
 
 fs.mkdirSync(`${OUT}/web`, { recursive: true })
-fs.mkdirSync(`${OUT}/utility`, { recursive: true })
+
+const DRY = process.argv.includes('--dry')
+/** Rows to publish, per project. */
+const rows = { general: [], ict: [] }
 
 /** Bundle JSX (entry source given as text) against one web project's node_modules, then import the result. */
 async function run(entry, project, stubs) {
@@ -97,8 +105,7 @@ async function math() {
       var t = card.querySelector('.mf-card-title');
       card.setAttribute('data-uid', mathUidOfText(sectionId + '::' + ((t && t.textContent) || card.textContent || '')));
     });`)
-  fs.writeFileSync(`${OUT}/web/math.body.html`, body)
-  fs.writeFileSync(`${OUT}/web/math.sections.json`, JSON.stringify(mod.sections))
+  rows.general.push({ kind: 'web', key: 'math', sort_order: 0, payload: { sections: mod.sections, html: body } })
   const cards = (body.match(/data-uid="/g) || []).length
   console.log(`math: ${mod.sections.length} sections, ${cards} markable cards, ${(body.length / 1024).toFixed(0)} KB`)
 }
@@ -141,27 +148,42 @@ async function equations() {
     [/shared\/HighlightableText\.jsx$/, `export default function HighlightableText({ as: As = 'span', className, block, text, highlights, ...rest }) { return <As className={className} data-hl-block={block} {...rest}>{text}</As> }`],
     [/lib\/highlightSync\.js$/, `export const DEFAULT_COLOR = 'mint'`],
   ])
-  const index = []
-  for (const [id, t] of Object.entries(mod.out)) {
-    fs.writeFileSync(`${OUT}/web/equation_${id}.body.html`, t.html)
-    index.push({ id, groups: t.groups, equations: t.groups.reduce((n, g) => n + g.equations, 0) })
+  Object.entries(mod.out).forEach(([id, t], i) => {
+    rows.ict.push({
+      kind: 'web', key: `equation_${id}`, sort_order: i,
+      payload: { id, groups: t.groups, equations: t.groups.reduce((n, g) => n + g.equations, 0), html: t.html },
+    })
     console.log(`equation ${id}: ${t.groups.length} groups, ${(t.html.length / 1024).toFixed(0)} KB`)
-  }
-  fs.writeFileSync(`${OUT}/web/equation.index.json`, JSON.stringify(index))
+  })
 }
 
-// ── Financial terms (general-quiz): plain data, icons become names ───────────
-async function finance() {
-  let src = fs.readFileSync(`${GQ}/src/data/utility/finTermsData.js`, 'utf8')
-  src = src.replace(/import \{[\s\S]*?\} from 'lucide-react'/, (m) => m.match(/[A-Z][A-Za-z0-9]*/g).filter((n) => n !== 'lucide')
-    .map((n) => `const ${n} = '${n}'`).join(';'))
-  const file = path.join(TMP, 'fin.mjs')
-  fs.writeFileSync(file, src)
-  const m = await import(pathToFileURL(file).href)
-  const cats = Object.entries(m.FIN_CATEGORIES).map(([name, color]) => ({ name, color }))
-  const cards = m.FIN_CARDS.map((c) => ({ id: c.id, cat: c.cat, title: c.title, subtitle: c.subtitle, icon: c.icon, body: c.body }))
-  fs.writeFileSync(`${OUT}/utility/finance.json`, JSON.stringify({ categories: cats, cards }))
-  console.log(`finance: ${cards.length} cards, ${cats.length} categories`)
+/** Reads KEY=value pairs from a web project's env files. */
+function envOf(project) {
+  const env = {}
+  for (const f of ['.env', '.env.local']) {
+    if (!fs.existsSync(`${project}/${f}`)) continue
+    for (const line of fs.readFileSync(`${project}/${f}`, 'utf8').split('\n')) {
+      const m = line.match(/^\s*([\w.]+)\s*=\s*(.*)\s*$/)
+      if (m && !line.trimStart().startsWith('#')) env[m[1]] = m[2].trim().replace(/^["']|["']$/g, '')
+    }
+  }
+  return env
+}
+
+/** Upserts a project's rows into its own Supabase project (service role key from that project's env). */
+async function publish(name, project) {
+  const list = rows[name]
+  for (const r of list) console.log(`  ${name}/${r.kind}/${r.key}: ${(JSON.stringify(r.payload).length / 1024).toFixed(0)} KB`)
+  if (DRY) return console.log(`${name}: dry run, nothing uploaded`)
+  const env = envOf(project)
+  if (!env.VITE_SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) throw new Error(`${project}: missing VITE_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY`)
+  const { createClient } = createRequire(`${project}/package.json`)('@supabase/supabase-js')
+  const db = createClient(env.VITE_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY)
+  for (const r of list) { // one at a time: the math page alone is ~600 KB
+    const { error } = await db.from('content_blobs').upsert({ ...r, updated_at: new Date().toISOString() }, { onConflict: 'kind,key' })
+    if (error) throw new Error(`${name}/${r.key}: ${error.message}`)
+  }
+  console.log(`${name}: published ${list.length} rows`)
 }
 
 // ── Highlights inside the equation WebView: the web's own anchoring + painting code, plus glue ──
@@ -183,11 +205,13 @@ function katex() {
   fs.writeFileSync(`${OUT}/web/katex/katex.min.css`, css)
   for (const f of fs.readdirSync(`${dist}/fonts`).filter((f) => f.endsWith('.woff2'))) fs.copyFileSync(`${dist}/fonts/${f}`, `${OUT}/web/katex/fonts/${f}`)
   for (const [name, file] of [['equation', `${IQ}/src/components/equation/equation.css`], ['mathformulas', `${GQ}/src/components/utility/MathFormulas.css`]]) {
-    fs.copyFileSync(file, `${OUT}/web/${name}.css`)
+    // Slate's copies are adapted (e.g. equation diagrams fill the card), so an existing one is never overwritten.
+    if (!fs.existsSync(`${OUT}/web/${name}.css`)) fs.copyFileSync(file, `${OUT}/web/${name}.css`)
   }
   console.log('katex css + fonts copied')
 }
 
 try {
-  await math(); await equations(); await finance(); katex(); highlightScript()
+  await math(); await equations(); katex(); highlightScript()
+  await publish('general', GQ); await publish('ict', IQ)
 } finally { fs.rmSync(TMP, { recursive: true, force: true }) }

@@ -7,11 +7,17 @@ import com.syed.slate.practice.Problem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 
 class PracticeTest {
-    private val categories = PracticeData.load { File("src/main/assets/$it").inputStream() }
+    // The data lives in Supabase; its authoring source is the sibling web project (tests that need it skip when absent).
+    private val src = File(System.getProperty("user.home"), "Projects/Self/Quiz/ict-quiz/src/data/practice")
+    private val categories by lazy {
+        assumeTrue("ict-quiz checkout not found", src.isDirectory)
+        PracticeData.parse(listOf("linux", "sql").map { org.json.JSONObject(File(src, "$it.json").readText()) })
+    }
 
     @Test fun shellCommandsIgnoreSpacingAndTrailingSemicolonButNotCase() {
         assertTrue(Practice.checkAnswer("  cd   /etc ;", listOf("cd /etc")))
