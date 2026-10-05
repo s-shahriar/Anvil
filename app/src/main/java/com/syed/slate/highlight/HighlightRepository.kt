@@ -52,10 +52,17 @@ class HighlightRepository(
     /** The colour a pending recolour started from, so undoing it can cancel the edit instead of queueing another. */
     private val editFrom = HashMap<String, String>()
     private val stamps = HashMap<String, Long>()
+    /** Unsaved work: nothing here is queued or sent until [save]. New highlights, committed ones hidden, committed ones recoloured. */
+    private val dAdds = LinkedHashMap<String, Highlight>()
+    private val dDeletes = LinkedHashSet<String>()
+    private val dEdits = LinkedHashMap<String, String>()
     private val lock = Any()
     private val _byUid = MutableStateFlow<Map<String, List<Highlight>>>(emptyMap())
     /** Every highlight, grouped by question uid. */
     val byUid: StateFlow<Map<String, List<Highlight>>> = _byUid
+    private val _draftCount = MutableStateFlow(0)
+    /** How many highlight changes are waiting for Save. */
+    val draftCount: StateFlow<Int> = _draftCount
     private val _unsynced = MutableStateFlow(0)
     val unsynced: StateFlow<Int> = _unsynced
     private val _queue = MutableStateFlow<List<HlOp>>(emptyList())
@@ -77,6 +84,11 @@ class HighlightRepository(
             o.optJSONObject("editFrom")?.let { e -> e.keys().forEach { editFrom[it] = e.getString(it) } }
             o.optJSONObject("stamps")?.let { e -> e.keys().forEach { stamps[it] = e.getLong(it) } }
             o.getJSONObject("edits").let { e -> e.keys().forEach { edits[it] = e.getString(it) } }
+            o.optJSONObject("draft")?.let { d ->
+                d.optJSONArray("adds")?.let { a -> for (i in 0 until a.length()) Highlight.fromJson(a.getJSONObject(i)).let { dAdds[it.id] = it } }
+                d.optJSONArray("deletes")?.let { a -> for (i in 0 until a.length()) dDeletes.add(a.getString(i)) }
+                d.optJSONObject("edits")?.let { e -> e.keys().forEach { dEdits[it] = e.getString(it) } }
+            }
             // An older file kept deletes as bare ids; they still go out, they just cannot be undone.
             o.optJSONArray("deletes")?.let { a -> for (i in 0 until a.length()) a.getString(i).let { id -> if (id !in deleted) legacyDeletes.add(id) } }
         }
@@ -95,7 +107,12 @@ class HighlightRepository(
     }
 
     private fun publish() {
-        _byUid.value = items.values.groupBy { it.uid }
+        // What the screen shows: the committed highlights with the draft laid over them.
+        val view = ArrayList<Highlight>(items.size + dAdds.size)
+        for (h in items.values) { if (h.id in dDeletes) continue; view += dEdits[h.id]?.let { h.copy(color = it) } ?: h }
+        view += dAdds.values
+        _draftCount.value = dAdds.size + dDeletes.size + dEdits.size
+        _byUid.value = view.groupBy { it.uid }
         _unsynced.value = pending()
         _queue.value = opsNow()
     }
@@ -108,54 +125,89 @@ class HighlightRepository(
             .put("deletes", JSONArray(legacyDeletes.toList()))
             .put("edits", JSONObject(edits as Map<*, *>))
             .put("editFrom", JSONObject(editFrom as Map<*, *>))
-            .put("stamps", JSONObject(stamps as Map<*, *>)).toString())
+            .put("stamps", JSONObject(stamps as Map<*, *>))
+            .put("draft", JSONObject().put("adds", JSONArray(dAdds.values.map { it.toJson() })).put("deletes", JSONArray(dDeletes.toList())).put("edits", JSONObject(dEdits as Map<*, *>)))
+            .toString())
         publish()
     }
 
     fun forUid(uid: String): List<Highlight> = _byUid.value[uid].orEmpty()
 
+    /** A new highlight. It is only a draft until [save]. */
     fun add(uid: String, anchors: List<Anchored>, color: String) {
         if (anchors.isEmpty()) return
         synchronized(lock) {
-            val now = System.currentTimeMillis()
-            for (a in anchors) {
-                val h = Highlight(UUID.randomUUID().toString(), uid, a.block, a.start, a.end, a.quote, color)
-                items[h.id] = h; addIds.add(h.id); stamps[h.id] = now
-            }
+            for (a in anchors) { val h = Highlight(UUID.randomUUID().toString(), uid, a.block, a.start, a.end, a.quote, color); dAdds[h.id] = h }
             persist()
         }
-        kick()
     }
 
+    /** Removes highlights from view. Unsaved ones simply vanish; saved ones are hidden until [save] makes the delete real. */
     fun remove(ids: List<String>) {
         synchronized(lock) {
-            val now = System.currentTimeMillis()
             for (id in ids) {
-                val h = items.remove(id) ?: continue
-                edits.remove(id); editFrom.remove(id)
-                if (addIds.remove(id)) stamps.remove(id) // never reached the server: it simply vanishes
-                else { deleted[id] = h; stamps[id] = now }
+                if (dAdds.remove(id) != null) continue
+                if (id in items) { dDeletes.add(id); dEdits.remove(id) }
             }
+            persist()
+        }
+    }
+
+    /** Recolours highlights in the draft; [save] makes it real. */
+    fun recolor(ids: List<String>, color: String) {
+        synchronized(lock) {
+            for (id in ids) {
+                val draft = dAdds[id]
+                if (draft != null) { dAdds[id] = draft.copy(color = color); continue }
+                val h = items[id] ?: continue
+                if (id in dDeletes) continue
+                if (h.color == color) dEdits.remove(id) else dEdits[id] = color
+            }
+            persist()
+        }
+    }
+
+    /** Commits the draft to the sync queue (offline-tolerant, shown in the sync sheet) and sends it. */
+    fun save() {
+        synchronized(lock) {
+            if (dAdds.isEmpty() && dDeletes.isEmpty() && dEdits.isEmpty()) return
+            val now = System.currentTimeMillis()
+            for (h in dAdds.values) { items[h.id] = h; addIds.add(h.id); stamps[h.id] = now }
+            val deletes = dDeletes.toList(); val recolours = dEdits.toMap()
+            dAdds.clear(); dDeletes.clear(); dEdits.clear()
+            removeNow(deletes); for ((id, c) in recolours) recolorNow(listOf(id), c)
             persist()
         }
         kick()
     }
 
-    fun recolor(ids: List<String>, color: String) {
-        synchronized(lock) {
-            val now = System.currentTimeMillis()
-            for (id in ids) {
-                val h = items[id] ?: continue
-                if (h.color == color) continue
-                items[id] = h.copy(color = color)
-                if (id in addIds) continue // still an insert: it will go out with the new colour
-                val origin = editFrom.getOrPut(id) { h.color }
-                if (origin == color) { edits.remove(id); editFrom.remove(id); stamps.remove(id) } // back to what the server has
-                else { edits[id] = color; stamps[id] = now }
-            }
-            persist()
+    /** Drops the draft without saving anything. */
+    fun discard() {
+        synchronized(lock) { dAdds.clear(); dDeletes.clear(); dEdits.clear(); persist() }
+    }
+
+    // The queue-level operations: they change what will be sent. Used by [save] and by Undo in the sync sheet.
+    private fun removeNow(ids: List<String>) {
+        val now = System.currentTimeMillis()
+        for (id in ids) {
+            val h = items.remove(id) ?: continue
+            edits.remove(id); editFrom.remove(id)
+            if (addIds.remove(id)) stamps.remove(id) // never reached the server: it simply vanishes
+            else { deleted[id] = h; stamps[id] = now }
         }
-        kick()
+    }
+
+    private fun recolorNow(ids: List<String>, color: String) {
+        val now = System.currentTimeMillis()
+        for (id in ids) {
+            val h = items[id] ?: continue
+            if (h.color == color) continue
+            items[id] = h.copy(color = color)
+            if (id in addIds) continue // still an insert: it will go out with the new colour
+            val origin = editFrom.getOrPut(id) { h.color }
+            if (origin == color) { edits.remove(id); editFrom.remove(id); stamps.remove(id) } // back to what the server has
+            else { edits[id] = color; stamps[id] = now }
+        }
     }
 
     /** Brings a removed highlight back: cancels its pending delete, or re-inserts it if the delete already went through. */
@@ -181,9 +233,9 @@ class HighlightRepository(
     fun undo(op: HlOp) {
         if (!canUndo(op)) return
         when (op.kind) {
-            HlKind.ADD -> remove(listOf(op.id))
+            HlKind.ADD -> { synchronized(lock) { removeNow(listOf(op.id)); persist() }; kick() }
             HlKind.REMOVE -> restore(op.h)
-            HlKind.RECOLOR -> recolor(listOf(op.id), op.from!!)
+            HlKind.RECOLOR -> { synchronized(lock) { recolorNow(listOf(op.id), op.from!!); persist() }; kick() }
         }
     }
 

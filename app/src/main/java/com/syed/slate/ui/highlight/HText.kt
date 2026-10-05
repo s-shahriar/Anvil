@@ -18,6 +18,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
@@ -135,9 +137,31 @@ fun HighlightHost(repo: HighlightRepository, content: @Composable () -> Unit) {
         Box(Modifier.fillMaxSize()) {
             content()
             val t = controller.target
+            val unsaved by repo.draftCount.collectAsState()
             AnimatedVisibility(t != null, Modifier.align(Alignment.BottomCenter), enter = slideInVertically { it }, exit = slideOutVertically { it }) {
                 val shown = remember(t) { t } ?: return@AnimatedVisibility
                 HighlightBar(shown, controller, clipboard)
+            }
+            // Highlighting is local until Save (like the web apps): once the colour bar is done, a Save / Undo pill takes its place.
+            AnimatedVisibility(t == null && unsaved > 0, Modifier.align(Alignment.BottomCenter), enter = slideInVertically { it }, exit = slideOutVertically { it }) {
+                SaveBar(unsaved, repo)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SaveBar(count: Int, repo: HighlightRepository) {
+    val p = LocalPalette.current
+    Surface(
+        Modifier.navigationBarsPadding().padding(12.dp), shape = MaterialTheme.shapes.extraLarge, color = p.surface, shadowElevation = 8.dp, tonalElevation = 2.dp,
+    ) {
+        Row(Modifier.padding(start = 18.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("$count unsaved highlight${if (count == 1) "" else "s"}", style = MaterialTheme.typography.labelLarge)
+            IconButton(onClick = { repo.discard() }) { Icon(Icons.AutoMirrored.Filled.Undo, "Discard unsaved highlights") }
+            androidx.compose.material3.Button(onClick = { repo.save() }) {
+                Icon(Icons.Filled.Check, null, Modifier.size(18.dp))
+                Text("Save", Modifier.padding(start = 6.dp))
             }
         }
     }
