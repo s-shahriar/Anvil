@@ -85,7 +85,7 @@ class ProgressRepository(
      *  appear in the drawer already synced; [undo] sends the inverse, like the web's Undo on those rows. */
     class ExternalChange(
         val id: String, val uid: String?, val kind: String, val label: String, val text: String, val cat: String,
-        val syncedAt: Long, val undo: (suspend () -> Unit)?,
+        val syncedAt: Long, val undo: (suspend () -> Unit)?, val error: String? = null,
     )
 
     private val _external = MutableStateFlow(emptyList<ExternalChange>())

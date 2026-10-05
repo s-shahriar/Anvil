@@ -88,12 +88,7 @@ fun StudyCard(
             else TextButton(onClick = { selected = null; explOpen = false }) { Text("লুকাও") }
         }
         item.uid?.let { uid ->
-            flag.note?.let { n ->
-                Text(n, Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(p.elevated).padding(10.dp), style = MaterialTheme.typography.bodyMedium)
-            }
-            FlagBar(flag, uid, progress, itemId = item.id)
-            // The web's owner-only QuestionEditButton: fix a misfiled LiveMCQ question on the spot.
-            if (onLiveMcqEdit != null) TextButton(onClick = { onLiveMcqEdit?.invoke(item) }) { Text("Topic") }
+            FlagBar(flag, uid, progress, itemId = item.id, onTopicEdit = onLiveMcqEdit?.let { edit -> { edit(item) } })
         }
     }
 }

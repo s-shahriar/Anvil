@@ -57,7 +57,7 @@ fun UpdateCard(vm: SlateViewModel, showWhenIdle: Boolean, modifier: Modifier = M
                     Button(onClick = vm::checkForUpdate) { Text("Check for updates") }
                 }
                 UpdateState.Checking -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    SlateLoaderInline(20.dp)
                     Text("Checking for updates…", color = ink)
                 }
                 is UpdateState.UpToDate -> {

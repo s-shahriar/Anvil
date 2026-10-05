@@ -60,7 +60,7 @@ fun HomeScreen(vm: SlateViewModel, dark: Boolean, onModule: (ModuleId) -> Unit, 
                         Modifier.size(56.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(painterResource(R.drawable.ic_launcher_foreground), null, Modifier.size(56.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                        Icon(painterResource(R.drawable.ic_slate_mark), null, Modifier.size(56.dp), tint = MaterialTheme.colorScheme.onPrimary)
                     }
                     Column(Modifier.weight(1f)) {
                         Text("Slate", style = MaterialTheme.typography.displaySmall)

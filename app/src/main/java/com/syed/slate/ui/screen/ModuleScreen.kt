@@ -61,6 +61,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.syed.slate.ui.component.BarTitle
 import com.syed.slate.ui.component.SlateTopBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -155,7 +156,7 @@ fun ModuleScreen(vm: SlateViewModel, id: ModuleId, nav: ModuleNav) {
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             SlateTopBar(
-                title = { Text(id.title, style = MaterialTheme.typography.headlineSmall) },
+                title = { BarTitle(id.title, style = MaterialTheme.typography.headlineSmall) },
                 navigationIcon = { IconButton(onClick = { if (selected != null) selected = null else nav.onBack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                 actions = {
                     IconButton(onClick = nav.onBin) { Icon(Icons.Filled.DeleteOutline, "Recycle bin") }
@@ -172,7 +173,7 @@ fun ModuleScreen(vm: SlateViewModel, id: ModuleId, nav: ModuleNav) {
             val openQueue = LocalOpenSyncQueue.current
             SyncStatusStrip(m, online, onOpen = { openQueue?.invoke() })
             if (sync is SyncState.Running) {
-                LinearProgressIndicator(Modifier.fillMaxWidth())
+                com.syed.slate.ui.component.SlateLinearLoader(Modifier.fillMaxWidth())
                 Text((sync as SyncState.Running).message, Modifier.padding(horizontal = 20.dp, vertical = 6.dp), style = MaterialTheme.typography.labelMedium)
             }
             (sync as? SyncState.Failed)?.let {
@@ -187,7 +188,8 @@ fun ModuleScreen(vm: SlateViewModel, id: ModuleId, nav: ModuleNav) {
                     } else ModuleBody(id, s.content, flags, nav, sel, owner = LivemcqAdmin.isOwner(session?.userId))
                 }
                 ContentState.Empty -> if (sync !is SyncState.Running) EmptyState(online) { vm.refreshContent(id) }
-                ContentState.NotLoaded -> Unit
+                else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { com.syed.slate.ui.component.SlateLoader(label = (sync as SyncState.Running).message) }
+                ContentState.NotLoaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { com.syed.slate.ui.component.SlateLoader() }
             }
         }
     }
@@ -271,7 +273,7 @@ private fun ModuleBody(id: ModuleId, content: ModuleContent, flags: Map<String, 
                 Column {
                     Text(subModuleTitle(id, section), style = MaterialTheme.typography.titleLarge)
                     Text(
-                        listOfNotNull(subModuleTagline(id, section), sectionCount?.let { "$it questions" }).joinToString(" · "),
+                        sectionCount?.let { "$it questions" }.orEmpty(),
                         style = MaterialTheme.typography.labelMedium, color = p.text3,
                     )
                 }
@@ -451,7 +453,7 @@ private fun SubModuleLauncher(id: ModuleId, content: ModuleContent, onOpen: (Str
                             Spacer(Modifier.weight(1f))
                             Text(subModuleTitle(id, key), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             Text(
-                                listOfNotNull(subModuleTagline(id, key), count?.let { "$it questions" }).joinToString("\n"),
+                                count?.let { "$it questions" }.orEmpty(),
                                 style = MaterialTheme.typography.labelMedium, color = p.text3, maxLines = 3, overflow = TextOverflow.Ellipsis,
                             )
                         }

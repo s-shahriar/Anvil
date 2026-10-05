@@ -25,6 +25,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import com.syed.slate.ui.component.BarTitle
 import com.syed.slate.ui.component.SlateTopBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -109,7 +110,7 @@ fun MathFormulasScreen(vm: SlateViewModel, onBack: () -> Unit) {
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             SlateTopBar(
-                title = { Text("গণিত সূত্র সংকলন", style = MaterialTheme.typography.titleLarge) },
+                title = { BarTitle("গণিত সূত্র সংকলন", style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                 actions = {
                     IconButton(onClick = { cover = !cover; vm.setBoolPref("mf-cover", cover) }) {
@@ -169,7 +170,7 @@ fun EquationScreen(vm: SlateViewModel, topicId: String, onBack: () -> Unit) {
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             SlateTopBar(
-                title = { Text("${TopicCatalog.ictTopicNames[topic.id] ?: topic.id} — Equations", style = MaterialTheme.typography.titleLarge) },
+                title = { BarTitle("${TopicCatalog.ictTopicNames[topic.id] ?: topic.id} — Equations", style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                 actions = {
                     IconButton(onClick = { cover = !cover; vm.setBoolPref("ict-eq-cover", cover) }) {

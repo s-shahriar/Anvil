@@ -94,10 +94,10 @@ into the WebView (blocks are already tagged `data-hl-block`).
 
 ## Web parity (mirrored from general-quiz / ict-quiz, 2026-10-04)
 - **Sub-modules are Magpie-style cards** (`ModuleScreen`: `SubModuleLauncher`): opening General/ICT shows a 2-column grid of rounded
-  cards (icon coin + name + blurb + question count); tapping one opens that section in place (hero row, then the section's
+  cards (icon coin + name + question count; NO blurb line — the user removed sublines); tapping one opens that section in place (hero row, then the section's
   topics; system Back / top-bar Back returns to the grid). General's Written card opens the Data page. The earlier pill
   switcher (and wrapped chips / dropdown variants) was replaced at the user's request; don't bring them back.
-- **Home module cards**: two tall Magpie-style cards (230dp, 32dp radius, 68dp icon coin, title + tagline, offline status).
+- **Home module cards**: two tall Magpie-style cards (230dp, 32dp radius, 68dp icon coin, name + stats line only, no tagline).
 - **Reading text is Inter (bundled `res/font/inter_*.ttf`), NOT Jakarta** (`Type.kt`): zero tracking, bodyLarge 17/30, bodyMedium 15.7/29, bodySmall 13/21;
   Bangla falls back to system Noto Sans Bengali. Jakarta (the web's `--font-display`) reads cramped as body copy. Sizes/leading
   mirror the web's reading rules (question ~1.1rem/1.75, points ~0.98rem/1.85). HTML paragraph gap 10dp (`.rich p`).
@@ -124,6 +124,14 @@ into the WebView (blocks are already tagged `data-hl-block`).
   open card's question scrolls off the top, a slim pinned bar names it; tap scrolls back.
 - **Still missing**: the LiveMCQ category suggester (classifier), GK study-notes reader (GkStudyMode; needs bundled
   `data/gk/*.json` + a block renderer).
+
+## UI conventions added 2026-10-05
+- **Loading**: use `ui/component/SlateLoader.kt` (`SlateLoader`, `SlateLoaderInline`, `SlateLinearLoader`) for every indeterminate loading state; determinate progress bars stay Material.
+- **Top-bar titles** are one line (`BarTitle` in `Hand.kt`, shrinks then ellipsizes). **Notes** are hidden by default: the note chip opens a bottom sheet (`ui/quiz/Notes.kt`).
+- **Study filters** are single-select (সব/Important/Weak/Nailed, scrollable row); nailing removes a card from the non-Nailed lists as in the web. The LiveMCQ topic edit is an icon chip in `FlagBar`.
+- **LiveMCQ admin** tabs are icons (active tab spells its name), same in the web general-quiz (`cb9276d`). Admin ops (import/move/delete/sub-topic) are logged into the sync queue.
+- **Written reader** pinned question bar = `ui/reader/QuestionPeekBar.kt` (web parity: expand/collapse, scroll-to-card button).
+- **Launcher icon**: dark slate board + chalk check on rust, content inside the central 60% (safe for round masks); `ic_slate_mark` is the Home logo.
 
 ## Testing notes
 - Unit tests cover uid hashing, flag rules/queue, HTML parsing, pools/search, updater helpers (27 tests).

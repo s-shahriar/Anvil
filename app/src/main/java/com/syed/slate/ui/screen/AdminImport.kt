@@ -26,6 +26,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Warning
@@ -54,6 +56,8 @@ import com.syed.slate.ModuleServices
 import com.syed.slate.content.ContentState
 import com.syed.slate.content.LivemcqClassifier
 import com.syed.slate.content.Subtopic
+import com.syed.slate.progress.ProgressRepository
+import com.syed.slate.ui.component.SlateLoader
 import com.syed.slate.ui.rich.RichText
 import com.syed.slate.ui.theme.LocalPalette
 import kotlinx.coroutines.Dispatchers
@@ -245,8 +249,23 @@ internal fun ImportPanel(
                     (if (skipped != null && skipped.length() > 0) " (already present: ${List(skipped.length()) { skipped.optString(it) }.joinToString(", ")})" else "")
                 st.missing = emptySet()
                 st.items = st.items.filter { it.norm.favoriteId !in sent }
-                onInserted()
-            } catch (e: Exception) { st.error = e.message ?: e.toString() }
+                val n = res.optInt("inserted")
+                val byCat = subset.groupBy { catalog.catName(it.slug) }
+                m.progress.recordExternal(ProgressRepository.ExternalChange(
+                    id = "import-${System.nanoTime()}", uid = null, kind = "insert",
+                    label = if (n == 1) stripTags(subset.first().norm.question).take(120) else "Imported $n question${if (n == 1) "" else "s"}",
+                    text = "Imported $n question${if (n == 1) "" else "s"}" + (if (res.optInt("skipped") > 0) " · ${res.optInt("skipped")} skipped" else ""),
+                    cat = byCat.entries.joinToString(", ") { "${it.key} ${it.value.size}" },
+                    syncedAt = System.currentTimeMillis(), undo = null,
+                ))
+            } catch (e: Exception) {
+                st.error = e.message ?: e.toString()
+                m.progress.recordExternal(ProgressRepository.ExternalChange(
+                    id = "import-${System.nanoTime()}", uid = null, kind = "insert",
+                    label = "Import of ${subset.size} question${if (subset.size == 1) "" else "s"}", text = "Import failed",
+                    cat = "", syncedAt = System.currentTimeMillis(), undo = null, error = st.error,
+                ))
+            }
             st.busy = false
         }
     }
@@ -265,25 +284,31 @@ internal fun ImportPanel(
         ) {
             // HEADER_ITEMS items precede the question cards (keep in step with scrollTo).
             item(key = "upload") {
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.surface).padding(14.dp),
+                if (st.fileName.isEmpty() && items.isEmpty()) Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(p.surface).border(1.dp, p.outline, RoundedCornerShape(22.dp))
+                        .clickable(enabled = !st.busy) { pick.launch("*/*") }.padding(horizontal = 20.dp, vertical = 28.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Box(Modifier.size(56.dp).clip(CircleShape).background(p.primary.copy(alpha = .14f)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.FileUpload, null, Modifier.size(26.dp), tint = p.primary)
+                    }
+                    Text("Choose a livefav JSON", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text("Questions are checked against the database, then you classify and insert them.", style = MaterialTheme.typography.bodySmall, color = p.text3, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                } else Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(p.surface).padding(horizontal = 14.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Row(
-                        Modifier.clip(RoundedCornerShape(14.dp)).background(p.primary).clickable(enabled = !st.busy) { pick.launch("*/*") }.padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Icon(Icons.Filled.FileUpload, null, Modifier.size(16.dp), tint = p.onPrimary)
-                        Text("Choose livefav JSON", color = p.onPrimary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                    }
-                    if (st.fileName.isNotEmpty()) Text(st.fileName, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = p.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Icon(Icons.Filled.FileUpload, null, Modifier.size(18.dp), tint = p.primary)
+                    Text(st.fileName.ifEmpty { "livefav" }, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        "Change", Modifier.clip(CircleShape).border(1.dp, p.outline, CircleShape).clickable(enabled = !st.busy) { pick.launch("*/*") }.padding(horizontal = 12.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelLarge, color = p.text2, fontWeight = FontWeight.SemiBold,
+                    )
                 }
             }
             item(key = "status") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (st.busy && items.isEmpty()) Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp); Text("Reading…", Modifier.padding(start = 8.dp), color = p.text3)
-                    }
+                    if (st.busy && items.isEmpty()) SlateLoader(Modifier.fillMaxWidth().padding(vertical = 24.dp), label = "Reading the file…", size = 32.dp)
                     if (st.error.isNotEmpty()) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(p.bad.copy(alpha = .12f)).padding(12.dp), verticalAlignment = Alignment.Top) {
                         Icon(Icons.Filled.ErrorOutline, null, Modifier.size(15.dp), tint = p.bad)
                         Text(st.error, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodySmall, color = p.bad)
@@ -294,34 +319,27 @@ internal fun ImportPanel(
                             Text(r, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodySmall, color = p.ok)
                         }
                     }
-                    st.summary?.let { s ->
-                        Text(
-                            buildString {
-                                append("${s.total} in file · ${s.fresh} new")
-                                if (s.dupInDb > 0) append(" · ${s.dupInDb} already in DB")
-                                if (s.dupInFile > 0) append(" · ${s.dupInFile} dup in file")
-                                if (s.badFid > 0) append(" · ${s.badFid} missing favorite_id")
-                            },
-                            style = MaterialTheme.typography.bodyMedium, color = p.text3,
-                        )
+                    st.summary?.let { sm ->
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Chip("${sm.total} in file", p.text2, p.elevated)
+                            Chip("${sm.fresh} new", p.ok, p.ok.copy(alpha = .14f))
+                            if (sm.dupInDb > 0) Chip("${sm.dupInDb} already in DB", p.text3, p.elevated)
+                            if (sm.dupInFile > 0) Chip("${sm.dupInFile} dup in file", p.warn, p.warn.copy(alpha = .14f))
+                            if (sm.badFid > 0) Chip("${sm.badFid} no favorite_id", p.bad, p.bad.copy(alpha = .14f))
+                        }
                     }
                 }
             }
             item(key = "toolbar") {
-                if (items.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Select all", Modifier.clickable { st.items = st.items.map { it.copy(picked = true) } }, style = MaterialTheme.typography.labelLarge, color = p.primary, fontWeight = FontWeight.SemiBold)
-                        Text("·", color = p.text3)
-                        Text("Clear", Modifier.clickable { st.items = st.items.map { it.copy(picked = false) } }, style = MaterialTheme.typography.labelLarge, color = p.primary, fontWeight = FontWeight.SemiBold)
-                    }
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (hintable > 0) GhostButton("Apply $hintable suggestion${if (hintable == 1) "" else "s"}", Icons.Filled.AutoFixHigh) { applyAllHints() }
-                        if (subHintable > 0) GhostButton("Apply $subHintable sub-topic suggestion${if (subHintable == 1) "" else "s"}", Icons.Filled.Sell) { applyAllSubHints() }
-                    }
-                    StyledSelect(
-                        bulkSlug, catalog.topics, { applyBulk(it) }, Modifier.fillMaxWidth(),
-                        placeholder = if (picked.isNotEmpty()) "Set category for ${picked.size} selected…" else "Select questions first…",
-                        enabled = picked.isNotEmpty(),
+                if (items.isNotEmpty()) FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val all = picked.size == items.size
+                    GhostButton(if (all) "Clear" else "Select all", Icons.Filled.Check) { st.items = st.items.map { it.copy(picked = !all) } }
+                    if (hintable > 0) GhostButton("Suggest $hintable", Icons.Filled.AutoFixHigh) { applyAllHints() }
+                    if (subHintable > 0) GhostButton("Sub-topics $subHintable", Icons.Filled.Sell) { applyAllSubHints() }
+                    if (picked.isNotEmpty()) ChipSelect(
+                        "Category for ${picked.size}", bulkSlug, catalog.topics, { applyBulk(it) }, p.text2, p.surface,
                     )
                 }
             }
@@ -389,112 +407,126 @@ private fun ImportCard(
 ) {
     val p = LocalPalette.current
     val n = item.norm
+    var open by remember(n.favoriteId) { mutableStateOf(false) }
     var showExp by remember(n.favoriteId) { mutableStateOf(false) }
+    val expanded = open || flagged
     val bulkMin = LivemcqClassifier.BULK_APPLY_MIN
     val hintTaken = hint != null && item.slug == hint.slug
     // The sub-topic that rides along with the category suggestion — only while no category is picked.
     val pairedSub = if (item.slug.isEmpty() && subHint != null) subHint else null
     val edge = if (flagged) p.warn else if (item.picked) p.primary.copy(alpha = .55f) else p.outline
+    val hasWarning = !n.hasKey || n.gapWarning || n.answerOutOfRange
 
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.surface).border(if (flagged) 2.dp else 1.dp, edge, RoundedCornerShape(18.dp)).padding(14.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.surface).border(if (flagged) 2.dp else 1.dp, edge, RoundedCornerShape(18.dp)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+        // Collapsed header: tick · #n · the question (two lines) · chevron.
+        Row(Modifier.fillMaxWidth().clickable { open = !open }, verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(
-                Modifier.size(24.dp).clip(RoundedCornerShape(7.dp)).background(if (item.picked) p.primary else p.elevated)
-                    .border(1.5.dp, if (item.picked) p.primary else p.outline, RoundedCornerShape(7.dp)).clickable(onClick = onToggle),
+                Modifier.size(26.dp).clip(RoundedCornerShape(8.dp)).background(if (item.picked) p.primary else p.elevated)
+                    .border(1.5.dp, if (item.picked) p.primary else p.outline, RoundedCornerShape(8.dp)).clickable(onClick = onToggle),
                 contentAlignment = Alignment.Center,
-            ) { if (item.picked) Icon(Icons.Filled.Check, "Selected", Modifier.size(15.dp), tint = p.onPrimary) }
-            Text("#$index", style = MaterialTheme.typography.labelLarge, color = p.text3, fontWeight = FontWeight.Bold)
-            Chip("fav ${n.favoriteId}", p.text3, p.elevated)
-            if (!n.hasKey) Chip("no correct answer → null", p.warn, p.warn.copy(alpha = .14f), icon = Icons.Filled.Warning)
-            if (n.gapWarning) Chip("empty option before a filled one", p.bad, p.bad.copy(alpha = .14f), icon = Icons.Filled.Warning)
-            if (n.answerOutOfRange) Chip("answer index out of range", p.bad, p.bad.copy(alpha = .14f), icon = Icons.Filled.Warning)
-        }
-        RichText(n.question, style = MaterialTheme.typography.bodyLarge)
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            n.options.forEachIndexed { i, o ->
-                val correct = n.hasKey && i == n.answer - 1
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (correct) p.ok.copy(alpha = .12f) else p.elevated)
-                        .border(1.dp, if (correct) p.ok.copy(alpha = .5f) else p.outline, RoundedCornerShape(12.dp)).padding(horizontal = 10.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Box(Modifier.size(24.dp).clip(RoundedCornerShape(7.dp)).background(if (correct) p.ok else p.surface), contentAlignment = Alignment.Center) {
-                        Text(LivemcqAdmin.LETTERS.getOrElse(i) { "?" }.uppercase(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = if (correct) Color.White else p.text2)
-                    }
-                    RichText(o, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                    if (correct) Icon(Icons.Filled.Check, null, Modifier.size(14.dp), tint = p.ok)
-                }
+            ) { if (item.picked) Icon(Icons.Filled.Check, "Selected", Modifier.size(16.dp), tint = p.onPrimary) }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    "${stripTags(n.question).ifEmpty { "(image-only)" }}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium,
+                    maxLines = if (expanded) 6 else 2, overflow = TextOverflow.Ellipsis,
+                )
+                Text("#$index · fav ${n.favoriteId}", style = MaterialTheme.typography.labelSmall, color = p.text3)
             }
-        }
-        if (n.explanation.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("ব্যাখ্যা ${if (showExp) "▴" else "▾"}", Modifier.clickable { showExp = !showExp }, style = MaterialTheme.typography.labelLarge, color = p.primary, fontWeight = FontWeight.SemiBold)
-            if (showExp) RichText(n.explanation, style = MaterialTheme.typography.bodyMedium, color = p.text2)
+            if (hasWarning) Icon(Icons.Filled.Warning, "Needs a look", Modifier.size(18.dp), tint = p.warn)
+            Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, if (expanded) "Collapse" else "Expand", Modifier.size(22.dp), tint = p.text3)
         }
 
-        // One box, both fields: Apply settles topic and sub-topic together.
-        if (hint != null && !hintTaken) SuggestionBox(
-            hint, nameOf = { catalog.catName(it) }, label = null,
-            subName = pairedSub?.let { catalog.subName(hint.slug, it.slug) }, subWeak = pairedSub != null && pairedSub.confidence < bulkMin,
-        ) { onApplyHint(hint.slug, pairedSub?.slug ?: "") }
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            StyledSelect(item.slug, catalog.topics, onSlug, Modifier.weight(1f), placeholder = "Select category…", invalid = flagged)
-            Row(
-                Modifier.clip(RoundedCornerShape(12.dp)).background(p.primary.copy(alpha = if (busy) .4f else 1f)).clickable(enabled = !busy, onClick = onInsertOne).padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
-            ) {
-                Icon(Icons.Filled.Check, null, Modifier.size(14.dp), tint = p.onPrimary)
-                Text("Insert", color = p.onPrimary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+        // One compact control row: category, sub-topic (when the category has them) and the single suggestion.
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+            ChipSelect(
+                if (item.slug.isEmpty()) "Category" else catalog.catName(item.slug), item.slug, catalog.topics, onSlug,
+                if (item.slug.isEmpty()) (if (flagged) p.warn else p.text3) else p.text2,
+                if (item.slug.isEmpty()) (if (flagged) p.warn.copy(alpha = .14f) else p.elevated) else p.elevated,
+            )
+            if (item.slug.isNotEmpty() && subRequired) {
+                val sel = item.subtopic.takeIf { it.isNotEmpty() && it != NO_SUB }
+                ChipSelect(
+                    sel?.let { catalog.subName(item.slug, it) } ?: if (item.subtopic == NO_SUB) "no sub-topic" else "Sub-topic",
+                    item.subtopic, catalog.subList(item.slug).map { it.slug to it.name } + (NO_SUB to "কোনো sub-topic নয়"), onSub,
+                    if (sel != null) p.warn else if (flagged) p.warn else p.text3,
+                    if (sel != null || flagged) p.warn.copy(alpha = .14f) else p.elevated, icon = Icons.Filled.Sell,
+                )
             }
+            if (hint != null && !hintTaken) SuggestionChip(
+                hint, nameOf = { catalog.catName(it) }, label = null,
+                subName = pairedSub?.let { catalog.subName(hint.slug, it.slug) }, subWeak = pairedSub != null && pairedSub.confidence < bulkMin,
+            ) { onApplyHint(hint.slug, pairedSub?.slug ?: "") }
+            if (item.slug.isNotEmpty() && subHint != null && item.subtopic != subHint.slug) SuggestionChip(
+                subHint, nameOf = { catalog.subName(item.slug, it) }, label = "Sub-topic", subName = null, subWeak = false,
+            ) { onSub(subHint.slug) }
         }
         if (flagged) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             Icon(Icons.Filled.ErrorOutline, null, Modifier.size(13.dp), tint = p.warn)
             Text(if (item.slug.isNotEmpty()) "Sub-topic is required." else "Category is required.", style = MaterialTheme.typography.labelMedium, color = p.warn)
         }
-        if (item.slug.isNotEmpty() && subHint != null && item.subtopic != subHint.slug) SuggestionBox(
-            subHint, nameOf = { catalog.subName(item.slug, it) }, label = "Sub-topic", subName = null, subWeak = false,
-        ) { onSub(subHint.slug) }
-        if (item.slug.isNotEmpty()) SubtopicPicker(
-            item.slug, catalog, item.subtopic, onSub, Modifier.fillMaxWidth(), m = m, required = subRequired,
-            invalid = flagged && subRequired && item.subtopic.isEmpty(), onAdded = { s -> onSubAdded(item.slug, s) },
-        )
+
+        if (expanded) {
+            if (hasWarning) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (!n.hasKey) Chip("no correct answer → null", p.warn, p.warn.copy(alpha = .14f), icon = Icons.Filled.Warning)
+                if (n.gapWarning) Chip("empty option before a filled one", p.bad, p.bad.copy(alpha = .14f), icon = Icons.Filled.Warning)
+                if (n.answerOutOfRange) Chip("answer index out of range", p.bad, p.bad.copy(alpha = .14f), icon = Icons.Filled.Warning)
+            }
+            RichText(n.question, style = MaterialTheme.typography.bodyLarge)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                n.options.forEachIndexed { i, o ->
+                    val correct = n.hasKey && i == n.answer - 1
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (correct) p.ok.copy(alpha = .12f) else p.elevated)
+                            .border(1.dp, if (correct) p.ok.copy(alpha = .5f) else p.outline, RoundedCornerShape(12.dp)).padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Box(Modifier.size(24.dp).clip(RoundedCornerShape(7.dp)).background(if (correct) p.ok else p.surface), contentAlignment = Alignment.Center) {
+                            Text(LivemcqAdmin.LETTERS.getOrElse(i) { "?" }.uppercase(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = if (correct) Color.White else p.text2)
+                        }
+                        RichText(o, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                        if (correct) Icon(Icons.Filled.Check, null, Modifier.size(14.dp), tint = p.ok)
+                    }
+                }
+            }
+            if (n.explanation.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("ব্যাখ্যা ${if (showExp) "▴" else "▾"}", Modifier.clickable { showExp = !showExp }, style = MaterialTheme.typography.labelLarge, color = p.primary, fontWeight = FontWeight.SemiBold)
+                if (showExp) RichText(n.explanation, style = MaterialTheme.typography.bodyMedium, color = p.text2)
+            }
+            if (item.slug.isNotEmpty() && subRequired) SubtopicPicker(
+                item.slug, catalog, item.subtopic, onSub, Modifier.fillMaxWidth(), m = m, required = true,
+                invalid = flagged && item.subtopic.isEmpty(), onAdded = { s -> onSubAdded(item.slug, s) },
+            )
+            if (hint != null) Text(
+                "closest stored question: “${stripTags(hint.nearestQuestion).take(90)}”" +
+                    (if (hint.nearestSource != "livemcq") " (from the ${hint.nearestSource} module)" else ""),
+                style = MaterialTheme.typography.labelSmall, color = p.text3, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                ModalButton("Insert this one", true, tint = p.primary, enabled = !busy, icon = Icons.Filled.Check, onClick = onInsertOne)
+            }
+        }
     }
 }
 
-/** A suggestion from the local tf-idf/kNN index — never auto-applied; it shows the neighbour it matched so it can be judged. */
+/** A suggestion from the local tf-idf/kNN index — never auto-applied; one small chip, tap to apply. */
 @Composable
-private fun SuggestionBox(
+private fun SuggestionChip(
     hint: LivemcqClassifier.Suggestion, nameOf: (String) -> String, label: String?, subName: String?, subWeak: Boolean, onApply: () -> Unit,
 ) {
     val p = LocalPalette.current
     val color = when (hint.tier) { "strong" -> p.ok; "likely" -> p.primary; else -> p.warn }
     val pct = Math.round(hint.confidence * 100).toInt()
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(color.copy(alpha = .1f)).border(1.dp, color.copy(alpha = .35f), RoundedCornerShape(14.dp)).padding(12.dp),
-        verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Icon(if (label != null) Icons.Filled.Sell else Icons.Filled.AutoFixHigh, null, Modifier.padding(top = 2.dp).size(14.dp), tint = color)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                buildString {
-                    if (label != null) append("$label · ")
-                    append("${TIER_LABEL[hint.tier]} ${nameOf(hint.slug)}")
-                    if (subName != null) append(" › $subName")
-                    append(" · $pct% agreement")
-                    if (hint.tier == "weak") append(" · low confidence")
-                    if (subName != null && subWeak) append(" · sub-topic uncertain")
-                },
-                style = MaterialTheme.typography.labelLarge, color = p.text2,
-            )
-            Text("closest stored question: “${stripTags(hint.nearestQuestion).take(90)}”", style = MaterialTheme.typography.labelSmall, color = p.text3, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (hint.nearestSource != "livemcq") Text("matched against the ${hint.nearestSource} module, not LiveMCQ", style = MaterialTheme.typography.labelSmall, color = p.text3)
-        }
-        Text(
-            "Apply", Modifier.clip(CircleShape).background(color).clickable(onClick = onApply).padding(horizontal = 14.dp, vertical = 7.dp),
-            style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold,
-        )
-    }
+    Chip(
+        buildString {
+            if (label != null) append("$label · ")
+            append("${TIER_LABEL[hint.tier]} ${nameOf(hint.slug)}")
+            if (subName != null) append(" › $subName")
+            append(" · $pct%")
+            if (subName != null && subWeak) append(" ?")
+        },
+        color, color.copy(alpha = .14f), icon = Icons.Filled.AutoFixHigh, onClick = onApply,
+    )
 }

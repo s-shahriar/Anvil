@@ -78,6 +78,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import com.syed.slate.ui.component.BarTitle
 import com.syed.slate.ui.component.SlateTopBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -169,7 +170,7 @@ fun DataCardsScreen(title: String, searchHint: String, categories: List<Pair<Str
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             SlateTopBar(
-                title = { Text(title, style = MaterialTheme.typography.titleLarge) },
+                title = { BarTitle(title, style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )

@@ -17,6 +17,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -26,6 +28,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.syed.slate.ui.component.BarTitle
 import com.syed.slate.ui.component.SlateTopBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -63,7 +66,8 @@ import kotlinx.coroutines.launch
 
 private const val PAGE = 20
 
-private enum class StudyFilter(val label: String) { ALL("সব"), IMPORTANT("Important"), WEAK("Weak") }
+/** One filter at a time, as the web's: সব / Important / Weak list the un-nailed questions; Nailed lists the nailed ones. */
+private enum class StudyFilter(val label: String) { ALL("সব"), IMPORTANT("Important"), WEAK("Weak"), NAILED("Nailed") }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,7 +80,6 @@ fun StudyScreen(vm: SlateViewModel, id: ModuleId, group: String, topic: String, 
     val all = remember(content, group, topic) { content?.items(group, topic).orEmpty().filter { it.isQuizzable } }
 
     var filter by rememberSaveable { mutableStateOf(StudyFilter.ALL) }
-    var showNailed by rememberSaveable { mutableStateOf(focus != null) }
     var query by rememberSaveable { mutableStateOf("") }
     var page by rememberSaveable { mutableIntStateOf(0) }
     // LiveMCQ topics can also be browsed by sub-topic (সন্ধি, সমাস …): a picker first, then that sub-topic's questions.
@@ -90,17 +93,19 @@ fun StudyScreen(vm: SlateViewModel, id: ModuleId, group: String, topic: String, 
         Subtopics.cards(all.filter { flags[it.uid]?.nailed != true }, subList)
     }
     val showPicker = bySub && activeSub == null && subList.isNotEmpty()
-    val visible = remember(all, flags, filter, showNailed, tokens, bySub, activeSub) {
-        all.filter { item ->
-            val f = item.uid?.let(flags::get)
-            (!bySub || activeSub == null || Subtopics.inSubtopic(item, activeSub!!, subList)) &&
-                (showNailed || f?.nailed != true) &&
-                when (filter) {
-                    StudyFilter.ALL -> true
-                    StudyFilter.IMPORTANT -> QuizPool.matches(PoolSet.IMPORTANT, f)
-                    StudyFilter.WEAK -> QuizPool.matches(PoolSet.WEAK, f)
-                } &&
-                (tokens.isEmpty() || SearchText.matches(haystacks.getValue(item.id), tokens))
+    val scoped = remember(all, flags, bySub, activeSub) {
+        all.filter { item -> !bySub || activeSub == null || Subtopics.inSubtopic(item, activeSub!!, subList) }
+    }
+    fun StudyFilter.accepts(f: Flag?): Boolean = when (this) {
+        StudyFilter.NAILED -> f?.nailed == true
+        StudyFilter.ALL -> f?.nailed != true
+        StudyFilter.IMPORTANT -> f?.nailed != true && QuizPool.matches(PoolSet.IMPORTANT, f)
+        StudyFilter.WEAK -> f?.nailed != true && QuizPool.matches(PoolSet.WEAK, f)
+    }
+    val counts = remember(scoped, flags) { StudyFilter.entries.associateWith { fl -> scoped.count { fl.accepts(it.uid?.let(flags::get)) } } }
+    val visible = remember(scoped, flags, filter, tokens) {
+        scoped.filter { item ->
+            filter.accepts(item.uid?.let(flags::get)) && (tokens.isEmpty() || SearchText.matches(haystacks.getValue(item.id), tokens))
         }
     }
     val pages = maxOf(1, (visible.size + PAGE - 1) / PAGE)
@@ -144,6 +149,9 @@ fun StudyScreen(vm: SlateViewModel, id: ModuleId, group: String, topic: String, 
         }
     }
 
+    // A deep link to a nailed question opens the Nailed list so the card is there to be found.
+    LaunchedEffect(focus) { if (focus != null && flags[focus]?.nailed == true) filter = StudyFilter.NAILED }
+
     // Deep link from search: jump to the page holding the question, and scroll to it.
     LaunchedEffect(focus, visible) {
         val i = visible.indexOfFirst { it.uid == focus }
@@ -154,7 +162,7 @@ fun StudyScreen(vm: SlateViewModel, id: ModuleId, group: String, topic: String, 
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             SlateTopBar(
-                title = { Text(name, style = MaterialTheme.typography.titleLarge) },
+                title = { BarTitle(name, style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
@@ -170,11 +178,12 @@ fun StudyScreen(vm: SlateViewModel, id: ModuleId, group: String, topic: String, 
                         query, { query = it; page = 0 }, Modifier.fillMaxWidth(), singleLine = true,
                         leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text("Search in this topic") },
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        StudyFilter.entries.forEach { f -> FilterChip(filter == f, { filter = f; page = 0 }, { Text(f.label) }) }
-                        FilterChip(showNailed, { showNailed = !showNailed; page = 0 }, { Text("Nailed") })
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        StudyFilter.entries.forEach { f ->
+                            FilterChip(filter == f, { filter = f; page = 0 }, { Text("${f.label} (${counts[f] ?: 0})", maxLines = 1, softWrap = false) })
+                        }
                     }
-                    Text("${visible.size} of ${all.size} questions", style = MaterialTheme.typography.labelMedium, color = LocalPalette.current.text3)
+                    Text("${visible.size} of ${scoped.size} questions", style = MaterialTheme.typography.labelMedium, color = LocalPalette.current.text3)
                 }
             }
             if (subList.isNotEmpty()) item {

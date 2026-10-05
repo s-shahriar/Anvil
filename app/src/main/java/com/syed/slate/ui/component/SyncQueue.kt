@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DriveFileMove
@@ -92,6 +93,8 @@ private class SyncRow(
     val attempts: Int = 0,
     /** true = reversible now · false = shown disabled (deleted forever) · null = no Undo button. */
     val undoable: Boolean? = null,
+    /** Failed admin operations are not retried, so they get a Dismiss instead. */
+    val dismiss: (() -> Unit)? = null,
     val undo: () -> Unit = {},
 )
 
@@ -197,11 +200,17 @@ fun SyncQueueSheet(m: ModuleServices, online: Boolean, onDismiss: () -> Unit) {
         ) { m.trash.undoQueued(c.id, c.op) }
     }
     for (c in external) {
+        val (icon, tint) = when (c.kind) {
+            "move" -> Icons.Filled.DriveFileMove to p.primary
+            "insert" -> Icons.Filled.FileUpload to p.ok
+            "delete" -> Icons.Filled.Delete to p.bad
+            else -> Icons.Filled.Sell to p.info
+        }
         rows += SyncRow(
-            "x-${c.id}-${c.syncedAt}", RowState.SYNCED,
-            if (c.kind == "move") Icons.Filled.DriveFileMove else Icons.Filled.Sell, if (c.kind == "move") p.primary else p.info,
-            c.label, c.text, c.cat, c.syncedAt, c.syncedAt,
-            undoable = if (c.undo != null) true else null,
+            "x-${c.id}-${c.syncedAt}", if (c.error != null) RowState.FAILED else RowState.SYNCED, icon, tint,
+            c.label, c.text, c.cat, c.syncedAt, c.syncedAt, error = c.error,
+            undoable = if (c.error == null && c.undo != null) true else null,
+            dismiss = if (c.error != null) ({ m.progress.dropExternal(c) }) else null,
         ) { scope.launch { runCatching { c.undo?.invoke() }.onSuccess { m.progress.dropExternal(c) } } }
     }
 
@@ -326,6 +335,10 @@ private fun SyncRowView(r: SyncRow, p: com.syed.slate.ui.theme.Palette) {
                 RowState.SYNCED -> Icon(Icons.Filled.Check, null, Modifier.size(14.dp), tint = p.ok)
                 RowState.FAILED -> Icon(Icons.Filled.Warning, null, Modifier.size(14.dp), tint = p.bad)
                 RowState.WAITING -> Icon(Icons.Filled.Schedule, null, Modifier.size(14.dp), tint = p.warn)
+            }
+            r.dismiss?.let { d ->
+                Text("Dismiss", Modifier.clip(CircleShape).border(1.dp, p.outline, CircleShape).clickable(onClick = d).padding(horizontal = 8.dp, vertical = 3.dp),
+                    style = MaterialTheme.typography.labelSmall, color = p.text2)
             }
             r.undoable?.let { enabled ->
                 Row(

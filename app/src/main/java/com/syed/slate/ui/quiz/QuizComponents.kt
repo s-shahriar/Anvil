@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Star
@@ -136,9 +137,10 @@ fun ExplanationBox(module: ModuleId, html: String, correct: Boolean?, modifier: 
 
 /** Nailed / Important / Weak / Note for one question; Weak only appears once a question is Important and not Nailed. */
 @Composable
-fun FlagBar(flag: Flag, uid: String, progress: ProgressRepository, modifier: Modifier = Modifier, labels: Boolean = false, itemId: String? = null, onDeleted: () -> Unit = {}) {
+fun FlagBar(flag: Flag, uid: String, progress: ProgressRepository, modifier: Modifier = Modifier, labels: Boolean = false, itemId: String? = null, onDeleted: () -> Unit = {}, onTopicEdit: (() -> Unit)? = null) {
     val p = LocalPalette.current
-    var noteOpen by remember { mutableStateOf(false) }
+    var peekOpen by remember { mutableStateOf(false) }
+    var editorOpen by remember { mutableStateOf(false) }
     var confirmTrash by remember { mutableStateOf(false) }
     val trash = LocalTrash.current
     HandMirror {
@@ -150,16 +152,27 @@ fun FlagBar(flag: Flag, uid: String, progress: ProgressRepository, modifier: Mod
         if (flag.important && !flag.nailed) {
             FlagChip(Icons.Filled.LocalFireDepartment, if (flag.weak) "Weak!" else "Weak", flag.weak, p.warn, labels) { progress.update(uid, FlagRules::toggleWeak) }
         }
-        FlagChip(Icons.Filled.EditNote, "Note", flag.note != null, MaterialTheme.colorScheme.primary, labels) { noteOpen = true }
+        // Hidden by default: a note is read through the chip (peek sheet), or written straight away when there is none yet.
+        FlagChip(Icons.Filled.EditNote, "Note", flag.note != null, MaterialTheme.colorScheme.primary, labels) { if (flag.note != null) peekOpen = true else editorOpen = true }
+        // The web's owner-only QuestionEditButton (LiveMCQ): move the question to another topic / sub-topic.
+        if (onTopicEdit != null) FlagChip(Icons.AutoMirrored.Filled.Label, "Topic", false, MaterialTheme.colorScheme.primary, labels) { onTopicEdit() }
         if (trash != null && itemId != null) FlagChip(Icons.Filled.Delete, "Delete", false, p.bad, labels) { confirmTrash = true }
     } }
     if (confirmTrash && trash != null && itemId != null) ConfirmTrashDialog(onConfirm = { confirmTrash = false; trash.trash(itemId); onDeleted() }, onDismiss = { confirmTrash = false })
-    if (noteOpen) {
-        NoteDialog(
+    if (peekOpen && flag.note != null) {
+        NotePeekSheet(
+            note = flag.note,
+            onEdit = { peekOpen = false; editorOpen = true },
+            onRemove = { peekOpen = false; progress.update(uid) { f -> FlagRules.setNote(f, null) } },
+            onDismiss = { peekOpen = false },
+        )
+    }
+    if (editorOpen) {
+        NoteEditorSheet(
             initial = flag.note.orEmpty(),
-            onSave = { progress.update(uid) { f -> FlagRules.setNote(f, it) }; noteOpen = false },
-            onRemove = { progress.update(uid) { f -> FlagRules.setNote(f, null) }; noteOpen = false },
-            onDismiss = { noteOpen = false },
+            onSave = { progress.update(uid) { f -> FlagRules.setNote(f, it) }; editorOpen = false },
+            onRemove = { progress.update(uid) { f -> FlagRules.setNote(f, null) }; editorOpen = false },
+            onDismiss = { editorOpen = false },
         )
     }
 }
@@ -176,23 +189,6 @@ private fun FlagChip(icon: ImageVector, label: String, on: Boolean, color: Color
         Icon(icon, label, Modifier.size(18.dp), tint = if (on) color else p.text3)
         if (showLabel) Text(label, style = MaterialTheme.typography.labelMedium, color = if (on) color else p.text2)
     }
-}
-
-@Composable
-fun NoteDialog(initial: String, onSave: (String) -> Unit, onRemove: () -> Unit, onDismiss: () -> Unit) {
-    var text by remember { mutableStateOf(initial) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Note") },
-        text = { OutlinedTextField(text, { text = it }, Modifier.fillMaxWidth(), placeholder = { Text("Write a note for this question") }, minLines = 3) },
-        confirmButton = { Button(onClick = { onSave(text) }) { Text("Save") } },
-        dismissButton = {
-            Row {
-                if (initial.isNotEmpty()) TextButton(onClick = onRemove) { Text("Remove") }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
-            }
-        },
-    )
 }
 
 @Composable

@@ -72,7 +72,6 @@ fun LongCard(
         // The listing the card is about, visible while collapsed.
         item.headerCode?.let { CodeBlock(it, item.headerCodeLang) }
         if (open) item.answer?.let { WrittenBody(it, uid = item.uid) }
-        flag.note?.let { Text(it, Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(p.elevated).padding(10.dp), style = MaterialTheme.typography.bodyMedium) }
         item.uid?.let { FlagBar(flag, it, progress, itemId = item.id) }
     }
 }

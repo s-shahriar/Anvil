@@ -25,6 +25,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.syed.slate.ui.component.HandMirror
+import com.syed.slate.ui.component.BarTitle
 import com.syed.slate.ui.component.SlateTopBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -92,7 +93,7 @@ fun SavedScreen(vm: SlateViewModel, id: ModuleId, kind: PoolSet, group: String, 
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             SlateTopBar(
-                title = { Text("$title · ${saved.size}", style = MaterialTheme.typography.titleLarge) },
+                title = { BarTitle("$title · ${saved.size}", style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )

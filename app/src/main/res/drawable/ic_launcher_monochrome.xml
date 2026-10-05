@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Single silhouette (tick knocked out) for the themed icon and for tinted use in the app. -->
+    <group android:translateY="-2">
+    <path android:fillColor="#FFFFFF" android:fillType="evenOdd" android:pathData="M41,31 H67 A8,8 0 0 1 75,39 V63 A8,8 0 0 1 67,71 H41 A8,8 0 0 1 33,63 V39 A8,8 0 0 1 41,31 Z M40.6,54.4 L51.2,65.1 L67.6,45.2 L62.4,40.8 L50.8,54.9 L45.4,49.6 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M43,76 H65 A2.8,2.8 0 0 1 65,81.6 H43 A2.8,2.8 0 0 1 43,76 Z" />
+    </group>
+</vector>

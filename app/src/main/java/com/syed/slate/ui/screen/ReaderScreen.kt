@@ -26,7 +26,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.syed.slate.ui.component.BarTitle
 import com.syed.slate.ui.component.SlateTopBar
+import com.syed.slate.ui.reader.QuestionPeekBar
 import kotlinx.coroutines.launch
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -135,13 +137,15 @@ fun ReaderScreen(
         if (focus != null && i >= 0) list.scrollToItem(i + 1)
     }
 
-    // QuestionPeek, as the web's sticky bar: while an open card's question has scrolled off the top,
-    // pin its first line under the top bar; tapping it scrolls back to the card.
+    // QuestionPeek (see QuestionPeekBar): shown while an open card's header has scrolled off but its body is
+    // still on screen (the web stops 140px before the card ends so the bar never covers the last lines).
+    val density = androidx.compose.ui.platform.LocalDensity.current
     val peek = remember(rows, open) {
+        val headerPx = with(density) { 64.dp.toPx() }; val tailPx = with(density) { 140.dp.toPx() }
         derivedStateOf {
             val vis = list.layoutInfo.visibleItemsInfo
-            val top = vis.filter { it.offset < 0 }.maxByOrNull { it.offset } ?: return@derivedStateOf null
-            (rows.getOrNull(top.index - 1) as? ListRow.Card)?.takeIf { it.item.uid in open }?.let { it to top.index }
+            val top = vis.firstOrNull { it.offset < -headerPx && it.offset + it.size > tailPx } ?: return@derivedStateOf null
+            (rows.getOrNull(top.index - 1) as? ListRow.Card)?.takeIf { it.item.uid in open || it.item.id in open }?.let { it to top.index }
         }
     }
     val peekState by peek
@@ -150,7 +154,7 @@ fun ReaderScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             SlateTopBar(
-                title = { Text(segment ?: name, style = MaterialTheme.typography.titleLarge) },
+                title = { BarTitle(segment ?: name, style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
@@ -207,23 +211,11 @@ fun ReaderScreen(
                 }
             }
         }
-            peekState?.let { (card, index) ->
-                Surface(
-                    Modifier.fillMaxWidth().align(Alignment.TopCenter)
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.surface,
-                    shadowElevation = 6.dp,
-                ) {
-                    Text(
-                        (card.number?.let { "Q$it · " } ?: "") + card.item.question.lineSequence().first().orEmpty(),
-                        Modifier.fillMaxWidth().clickable { scope.launch { list.scrollToItem(index) } }.padding(horizontal = 14.dp, vertical = 11.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
+            QuestionPeekBar(
+                question = peekState?.first?.item?.question, number = peekState?.first?.number,
+                onJump = { peekState?.second?.let { i -> scope.launch { list.animateScrollToItem(i) } } },
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
         }
     }
 }

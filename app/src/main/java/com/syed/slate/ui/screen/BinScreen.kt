@@ -38,6 +38,7 @@ import com.syed.slate.content.ContentState
 import com.syed.slate.content.TopicCatalog
 import com.syed.slate.trash.BinEntry
 import com.syed.slate.ui.SlateViewModel
+import com.syed.slate.ui.component.BarTitle
 import com.syed.slate.ui.component.SlateTopBar
 import com.syed.slate.ui.rich.HtmlParser
 import com.syed.slate.ui.theme.LocalPalette
@@ -81,14 +82,14 @@ fun BinScreen(vm: SlateViewModel, id: ModuleId, onBack: () -> Unit) {
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             SlateTopBar(
-                title = { Text("Recycle bin · ${id.title}", style = MaterialTheme.typography.titleLarge) },
+                title = { BarTitle("Recycle bin · ${id.title}", style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
     ) { pad ->
         Column(Modifier.fillMaxSize().padding(pad)) {
-            if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (loading) com.syed.slate.ui.component.SlateLinearLoader(Modifier.fillMaxWidth())
             error?.let { Text(it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             failure?.let { Text("Couldn't load the bin: $it", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             if (!online) Text("Offline — only changes made on this phone are listed.", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium, color = p.warn)

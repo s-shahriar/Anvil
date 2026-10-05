@@ -1,5 +1,6 @@
 package com.syed.slate.ui.screen
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -52,21 +53,32 @@ internal const val NEW_SUB = "__new__"
 /** Strips tags and collapses whitespace, like the web's stripTags. */
 internal fun stripTags(s: String?): String = (s ?: "").replace(Regex("<[^>]+>"), " ").replace(Regex("\\s+"), " ").trim()
 
-/** Tab button — three of these share the width; the active one is filled dark. */
+/**
+ * The admin's section switcher: one pill container, icons only — the active section also spells its name
+ * (the web does the same with titles/aria-labels on each icon).
+ */
 @Composable
-internal fun AdminTab(text: String, active: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun AdminTabBar(tabs: List<Triple<String, ImageVector, String>>, active: String, onSelect: (String) -> Unit) {
     val p = LocalPalette.current
-    Box(
-        modifier.heightIn(min = 54.dp).clip(RoundedCornerShape(14.dp))
-            .background(if (active) p.text else p.surface)
-            .border(1.dp, if (active) p.text else p.outline, RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center,
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(50)).background(p.surface).border(1.dp, p.outline, RoundedCornerShape(50)).padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(
-            text, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
-            color = if (active) p.bg else p.text2, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-        )
+        tabs.forEach { (key, icon, label) ->
+            val on = key == active
+            Row(
+                Modifier.weight(if (on) 2.2f else 1f).heightIn(min = 44.dp).clip(RoundedCornerShape(50))
+                    .background(if (on) p.primary else Color.Transparent)
+                    .clickable { onSelect(key) }.animateContentSize().padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
+            ) {
+                Icon(icon, label, Modifier.size(20.dp), tint = if (on) p.onPrimary else p.text2)
+                if (on) Text(
+                    label, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
+                    color = p.onPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
 
@@ -142,10 +154,10 @@ internal fun Chip(
 
 /** Square icon button used for move / delete on rows. */
 @Composable
-internal fun SquareIconButton(icon: ImageVector, tint: Color, desc: String, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun SquareIconButton(icon: ImageVector, tint: Color, desc: String, enabled: Boolean = true, size: androidx.compose.ui.unit.Dp = 40.dp, onClick: () -> Unit) {
     val p = LocalPalette.current
     Box(
-        Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(p.surface).border(1.dp, p.outline, RoundedCornerShape(12.dp))
+        Modifier.size(size).clip(RoundedCornerShape(12.dp)).background(p.surface).border(1.dp, p.outline, RoundedCornerShape(12.dp))
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { Icon(icon, desc, Modifier.size(18.dp), tint = if (enabled) tint else tint.copy(alpha = .35f)) }
@@ -234,5 +246,22 @@ internal fun ModalButton(text: String, filled: Boolean, tint: Color? = null, ena
         if (busy) CircularProgressIndicator(Modifier.size(15.dp), strokeWidth = 2.dp, color = fg)
         else icon?.let { Icon(it, null, Modifier.size(15.dp), tint = fg) }
         Text(text, style = MaterialTheme.typography.labelLarge, color = fg, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/** A chip that opens a dropdown of (value, label) options — compact category / sub-topic picking on a card. */
+@Composable
+internal fun ChipSelect(
+    label: String, value: String, options: List<Pair<String, String>>, onChange: (String) -> Unit,
+    fg: Color, bg: Color, modifier: Modifier = Modifier, icon: ImageVector? = null, enabled: Boolean = true,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box(modifier) {
+        Chip(label, fg, bg, icon = icon, trailing = Icons.Filled.ExpandMore, onClick = if (enabled) ({ open = true }) else null)
+        DropdownMenu(open, { open = false }) {
+            options.forEach { (v, name) ->
+                DropdownMenuItem({ Text(name, fontWeight = if (v == value) FontWeight.Bold else null) }, { onChange(v); open = false })
+            }
+        }
     }
 }

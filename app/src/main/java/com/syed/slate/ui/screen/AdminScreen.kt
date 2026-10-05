@@ -63,7 +63,9 @@ import com.syed.slate.content.ContentState
 import com.syed.slate.content.LivemcqClassifier
 import com.syed.slate.core.Uid
 import com.syed.slate.ui.SlateViewModel
+import com.syed.slate.ui.component.BarTitle
 import com.syed.slate.ui.component.SlateTopBar
+import com.syed.slate.ui.component.SlateLoader
 import com.syed.slate.ui.theme.LocalPalette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -81,6 +83,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ManageSearch
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -298,7 +302,7 @@ fun AdminScreen(vm: SlateViewModel, onBack: () -> Unit) {
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             SlateTopBar(
-                title = { Text("LiveMCQ Admin", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) },
+                title = { BarTitle("LiveMCQ Admin", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
@@ -315,10 +319,15 @@ fun AdminScreen(vm: SlateViewModel, onBack: () -> Unit) {
             return@Scaffold
         }
         Column(Modifier.fillMaxSize().padding(pad)) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AdminTab("Import & classify", tab == "import", Modifier.weight(1f)) { go("import") }
-                AdminTab("Last import", tab == "recent", Modifier.weight(1f)) { go("recent") }
-                AdminTab("Manage & delete", tab == "manage", Modifier.weight(1f)) { go("manage") }
+            Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                AdminTabBar(
+                    listOf(
+                        Triple("import", Icons.Filled.FileUpload, "Import & classify"),
+                        Triple("recent", Icons.Filled.History, "Last import"),
+                        Triple("manage", Icons.Filled.ManageSearch, "Manage & delete"),
+                    ),
+                    tab,
+                ) { go(it) }
             }
             Box(Modifier.fillMaxSize()) {
                 when (tab) {
@@ -363,10 +372,7 @@ private fun ManagePanel(
     val rowsNow = rememberUpdatedState(rowsIn)
     if (errorIn != null) { Text(errorIn, Modifier.padding(16.dp), color = p.bad); return }
     if (rows == null) {
-        Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-            Text("Loading rows…", Modifier.padding(start = 10.dp), color = p.text3)
-        }
+        SlateLoader(Modifier.fillMaxWidth().padding(top = 80.dp), label = "Loading questions…")
         return
     }
 
@@ -409,10 +415,10 @@ private fun ManagePanel(
     val shown = filtered.drop(start).take(pageSize)
     val total = active?.count ?: rows.size
 
-    fun record(row: LivemcqAdmin.Row, kind: String, text: String, toCat: String, undo: (suspend () -> Unit)?) {
+    fun record(row: LivemcqAdmin.Row, kind: String, text: String, toCat: String, error: String? = null, undo: (suspend () -> Unit)? = null) {
         m.progress.recordExternal(ProgressRepository.ExternalChange(
             id = "${row.id}-${System.nanoTime()}", uid = null, kind = kind, label = stripTags(row.question).take(120).ifEmpty { "(image-only)" },
-            text = text, cat = toCat, syncedAt = System.currentTimeMillis(), undo = undo,
+            text = text, cat = toCat, syncedAt = System.currentTimeMillis(), undo = undo, error = error,
         ))
     }
 
@@ -505,9 +511,7 @@ private fun ManagePanel(
             Text(line, style = MaterialTheme.typography.bodyMedium, color = p.text3)
         }
         if (importsOnly && itemById.isEmpty()) item(key = "loadq") {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp); Text("Loading questions…", Modifier.padding(start = 8.dp), color = p.text3)
-            }
+            SlateLoader(Modifier.fillMaxWidth().padding(vertical = 24.dp), label = "Loading questions…", size = 32.dp)
         }
         itemsIndexed(shown, key = { _, r -> r.id }) { i, r ->
             val item = if (studyList) itemById[r.id] else null
@@ -521,19 +525,21 @@ private fun ManagePanel(
                     StudyCard(ModuleId.GENERAL, item, item.uid?.let { flags[it] } ?: Flag(), m.progress, number = start + i + 1, topicLabel = r.catName)
                 }
             } else {
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(p.surface).padding(14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        MetaChips(r, catalog, onMove, onSub, Modifier.fillMaxWidth())
-                        Text(stripTags(r.question).take(160).ifEmpty { "(image-only)" }, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                        if (r.correctAnswer != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Box(Modifier.size(22.dp).clip(CircleShape).background(p.ok), contentAlignment = Alignment.Center) {
-                                Text(r.correctAnswer, style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold)
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(p.surface).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MetaChips(r, catalog, onMove, onSub, Modifier.fillMaxWidth())
+                    Text(stripTags(r.question).take(220).ifEmpty { "(image-only)" }, Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodyMedium, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (r.correctAnswer != null) {
+                                Box(Modifier.size(22.dp).clip(CircleShape).background(p.ok), contentAlignment = Alignment.Center) {
+                                    Text(r.correctAnswer, style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                                Text(stripTags(r.correctAnswerText).take(120).ifEmpty { "(no answer text)" }, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = p.ok, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
-                            Text(stripTags(r.correctAnswerText).take(120).ifEmpty { "(no answer text)" }, style = MaterialTheme.typography.bodyMedium, color = p.ok, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
+                        SquareIconButton(Icons.Filled.DriveFileMove, p.text2, "Change category", r.favoriteId != null, 36.dp) { onMove(r) }
+                        SquareIconButton(Icons.Filled.Delete, p.bad, "Delete question", r.favoriteId != null, 36.dp) { onDel(r) }
                     }
-                    SquareIconButton(Icons.Filled.DriveFileMove, p.text2, "Change category", r.favoriteId != null) { onMove(r) }
-                    SquareIconButton(Icons.Filled.Delete, p.bad, "Delete question", r.favoriteId != null) { onDel(r) }
                 }
             }
         }
@@ -553,7 +559,8 @@ private fun ManagePanel(
                     try {
                         LivemcqAdmin.deleteFavoriteIds(m.db, listOf(r.favoriteId ?: ""))
                         setRows((rowsNow.value ?: rows).filter { it.id != r.id }); scope.launch { m.content.refresh() }
-                    } catch (e: Exception) { err = e.message ?: "Delete failed" }
+                        record(r, "delete", "Deleted permanently", r.catName)
+                    } catch (e: Exception) { err = e.message ?: "Delete failed"; record(r, "delete", "Delete failed", r.catName, error = err) }
                     deleting = false; confirm = null
                 }
             }
@@ -572,7 +579,7 @@ private fun ManagePanel(
             ModalButton("Move", true, tint = p.info, enabled = changed, busy = moveBusy, icon = Icons.Filled.DriveFileMove) {
                 scope.launch {
                     moveBusy = true; err = ""
-                    try { moveTo(r, slug) } catch (e: Exception) { err = e.message ?: "Move failed" }
+                    try { moveTo(r, slug) } catch (e: Exception) { err = e.message ?: "Move failed"; record(r, "move", "Move to ${catalog.catName(slug)} failed", r.catName, error = err) }
                     moveBusy = false; moving = null
                 }
             }
@@ -594,7 +601,7 @@ private fun ManagePanel(
             ModalButton("Save", true, tint = p.primary, enabled = changed, busy = subBusy, icon = Icons.Filled.Check) {
                 scope.launch {
                     subBusy = true; err = ""
-                    try { subTo(r, chosen.ifEmpty { null }) } catch (e: Exception) { err = e.message ?: "Save failed" }
+                    try { subTo(r, chosen.ifEmpty { null }) } catch (e: Exception) { err = e.message ?: "Save failed"; record(r, "subtopic", "Sub-topic change failed", r.catName, error = err) }
                     subBusy = false; subMoving = null
                 }
             }

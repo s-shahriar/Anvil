@@ -14,6 +14,16 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarColors
+import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -87,3 +97,20 @@ fun SlateTopBar(
 
 /** Arrangement helper for rows that should put their action group first when left-handed. */
 fun <T> handOrdered(left: Boolean, first: T, second: T): Pair<T, T> = if (left) second to first else first to second
+
+/**
+ * A top-bar title: always one line (vertical space matters more than the full name), shrinking a little for long
+ * names before it ellipsizes.
+ */
+@Composable
+fun BarTitle(
+    text: String, modifier: Modifier = Modifier,
+    style: TextStyle = MaterialTheme.typography.titleLarge, fontWeight: FontWeight? = null,
+) {
+    var size by remember(text) { mutableStateOf(style.fontSize) }
+    Text(
+        text, modifier, style = style.copy(fontSize = size), fontWeight = fontWeight, maxLines = 1, softWrap = false,
+        overflow = TextOverflow.Ellipsis,
+        onTextLayout = { if (it.hasVisualOverflow && size.value > 15f) size = (size.value - 1f).sp },
+    )
+}
