@@ -53,6 +53,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.syed.slate.highlight.Anchor
 import com.syed.slate.highlight.Anchored
 import com.syed.slate.highlight.HIGHLIGHT_COLORS
@@ -187,6 +189,8 @@ fun HText(
     val owner = remember { Any() }
     var tfv by remember(annotated) { mutableStateOf(TextFieldValue(annotated)) }
     val clear = { tfv = tfv.copy(selection = TextRange.Zero) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var clearJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     // Applied right at the field, so the system's own copy/translate bubble never competes with Slate's colour bar.
     CompositionLocalProvider(LocalTextToolbar provides NoTextToolbar) {
@@ -195,6 +199,7 @@ fun HText(
         onValueChange = { nv ->
             tfv = tfv.copy(selection = nv.selection)
             val sel = nv.selection
+            clearJob?.cancel(); clearJob = null
             if (!sel.collapsed) {
                 val a = minOf(sel.start, sel.end).coerceIn(0, text.length); val b = maxOf(sel.start, sel.end).coerceIn(0, text.length)
                 if (b > a) {
@@ -212,7 +217,18 @@ fun HText(
             } else {
                 val at = sel.start
                 val inside = shown.firstOrNull { (s, e, _) -> at in s until e }
-                ctl.target = inside?.let { HlTarget.Edit(owner, it.third.ids, it.third.color, clear) }
+                when {
+                    inside != null -> ctl.target = HlTarget.Edit(owner, inside.third.ids, inside.third.color, clear)
+                    // The field reports a collapsed selection in passing while a selection is being made or its handles are
+                    // grabbed. Clearing at once made the bar flash and vanish just as the handles appeared, so a collapse
+                    // only ends the selection if it is still collapsed a moment later.
+                    ctl.target?.owner === owner -> clearJob = scope.launch {
+                        delay(450)
+                        if (ctl.target?.owner === owner && tfv.selection.collapsed) ctl.target = null
+                    }
+                    // A tap in some other text while a bar is up: that selection is over.
+                    ctl.target != null -> ctl.dismiss()
+                }
             }
         },
         readOnly = true, textStyle = resolved, cursorBrush = SolidColor(Color.Transparent), modifier = modifier,

@@ -68,6 +68,7 @@ import com.syed.slate.progress.ProgressRepository
 import com.syed.slate.trash.TrashOp
 import com.syed.slate.ui.rich.HtmlParser
 import com.syed.slate.ui.theme.LocalPalette
+import com.syed.slate.ui.theme.isDark
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -122,18 +123,22 @@ fun SyncQueueSheet(m: ModuleServices, online: Boolean, onDismiss: () -> Unit) {
     val trashDone by m.trash.done.collectAsState()
     val trashFailure by m.trash.failure.collectAsState()
     val hidden by m.trash.hidden.collectAsState()
-    val highlightPending by m.highlights.unsynced.collectAsState()
+    val hlQueue by m.highlights.queue.collectAsState()
+    val hlDone by m.highlights.done.collectAsState()
+    val hlFailure by m.highlights.failure.collectAsState()
+    val highlightPending = hlQueue.size
     val session by m.auth.session.collectAsState()
     val contentState by m.content.state.collectAsState()
 
     // Question text + topic name by uid and by row id, off the main thread (the cache holds thousands of rows).
-    val labels by produceState<Pair<Map<String, Pair<String, String>>, Map<String, Pair<String, String>>>>(emptyMap<String, Pair<String, String>>() to emptyMap(), contentState, queue, trashOps, done, trashDone) {
+    val labels by produceState<Pair<Map<String, Pair<String, String>>, Map<String, Pair<String, String>>>>(emptyMap<String, Pair<String, String>>() to emptyMap(), contentState, queue, trashOps, done, trashDone, hlQueue, hlDone) {
         val c = (contentState as? ContentState.Ready)?.content ?: return@produceState
         value = withContext(Dispatchers.Default) {
             val byUid = HashMap<String, Pair<String, String>>(); val byId = HashMap<String, Pair<String, String>>()
             val wanted = HashSet<String>().apply {
                 queue.forEach { add(it.uid) }; done.forEach { add(it.uid) }
                 trashOps.keys.forEach { add(it) }; trashDone.forEach { add(it.id) }
+                hlQueue.forEach { add(it.h.uid) }; hlDone.forEach { add(it.op.h.uid) }
             }
             val topicNames = HashMap<String, String>()
             c.groups.forEach { g -> g.topics.forEach { t -> topicNames["${t.group}/${t.slug}"] = t.name } }
@@ -175,11 +180,12 @@ fun SyncQueueSheet(m: ModuleServices, online: Boolean, onDismiss: () -> Unit) {
             undoable = if (op == TrashOp.PURGE) false else true,
         ) { m.trash.undoQueued(id, op) }
     }
-    if (highlightPending > 0) {
+    for (op in hlQueue) {
+        val d = describeHighlight(p, op)
         rows += SyncRow(
-            "h", RowState.WAITING, Icons.Filled.EditNote, MaterialTheme.colorScheme.primary,
-            "$highlightPending highlight edit${if (highlightPending == 1) "" else "s"}", "Highlights", "", 0, 0,
-        )
+            "h-${op.id}-${op.kind}", if (hlFailure != null) RowState.FAILED else RowState.WAITING, d.icon, d.tint, op.h.quote.trim(), d.text, byUid[op.h.uid]?.second.orEmpty(), op.at, 0,
+            error = hlFailure, undoable = if (m.highlights.canUndo(op)) true else null,
+        ) { m.highlights.undo(op) }
     }
     for (c in done) {
         val (text, topic) = byUid[c.uid] ?: ("Saved item" to "")
@@ -188,6 +194,13 @@ fun SyncQueueSheet(m: ModuleServices, online: Boolean, onDismiss: () -> Unit) {
             "d-${c.uid}-${c.syncedAt}", RowState.SYNCED, d.icon, d.tint, text, d.text, topic, c.at, c.syncedAt,
             undoable = flagUndoable(c.patch, c.uid, flags).takeIf { c.patch.keys.any { k -> k != "note" } },
         ) { m.progress.undoQueued(ProgressRepository.QueuedChange(c.uid, c.patch, c.at)) }
+    }
+    for (r in hlDone) {
+        val d = describeHighlight(p, r.op)
+        rows += SyncRow(
+            "hd-${r.op.id}-${r.op.kind}-${r.syncedAt}", RowState.SYNCED, d.icon, d.tint, r.op.h.quote.trim(), d.text, byUid[r.op.h.uid]?.second.orEmpty(), r.op.at, r.syncedAt,
+            undoable = if (m.highlights.canUndo(r.op)) true else null,
+        ) { m.highlights.undo(r.op) }
     }
     for (c in trashDone) {
         val (text, topic) = byId[c.id] ?: ("Saved item" to "")
@@ -275,7 +288,7 @@ fun SyncQueueSheet(m: ModuleServices, online: Boolean, onDismiss: () -> Unit) {
                     Text("Nothing waiting", style = MaterialTheme.typography.titleMedium)
                     Text(
                         if (savedAt > 0) "Last change saved ${ago(savedAt)}."
-                        else "Nail, important, weak, delete, Recycle Bin and topic / sub-topic changes show up here until they reach the server.",
+                        else "Nail, important, weak, highlight, delete, Recycle Bin and topic / sub-topic changes show up here until they reach the server.",
                         style = MaterialTheme.typography.bodyMedium, color = p.text3, textAlign = TextAlign.Center,
                     )
                 }
@@ -371,6 +384,15 @@ private fun describeFlag(p: com.syed.slate.ui.theme.Palette, patch: Map<String, 
         weak == true || (weak == false && important == null) -> Look(Icons.Filled.LocalFireDepartment, if (weak == true) p.warn else p.text3, text)
         important != null -> Look(if (important) Icons.Filled.Bookmark else Icons.Filled.BookmarkRemove, if (important) p.imp else p.text3, text)
         else -> Look(Icons.Filled.EditNote, p.text3, text)
+    }
+}
+
+private fun describeHighlight(p: com.syed.slate.ui.theme.Palette, op: com.syed.slate.highlight.HlOp): Look {
+    val fill = (if (p.isDark) com.syed.slate.ui.theme.Highlights.dark(op.h.color) else com.syed.slate.ui.theme.Highlights.light(op.h.color)).fill.copy(alpha = 1f)
+    return when (op.kind) {
+        com.syed.slate.highlight.HlKind.ADD -> Look(Icons.Filled.EditNote, fill, "Highlighted")
+        com.syed.slate.highlight.HlKind.REMOVE -> Look(Icons.Filled.BookmarkRemove, p.text3, "Highlight removed")
+        com.syed.slate.highlight.HlKind.RECOLOR -> Look(Icons.Filled.EditNote, fill, "Highlight recoloured")
     }
 }
 

@@ -15,6 +15,24 @@
     }
   }
 
+  // A diagram is too wide for the card at a readable size: tapping it opens a full-screen copy at a larger size that can be
+  // panned in both directions; tapping the dimmed edge or the close button returns to the page.
+  function openDiagram(svg) {
+    var box = document.createElement('div');
+    box.className = 'eq-zoom';
+    var scroller = document.createElement('div');
+    scroller.className = 'eq-zoom-scroll';
+    var big = svg.cloneNode(true);
+    big.removeAttribute('width'); big.removeAttribute('height');
+    scroller.appendChild(big);
+    var close = document.createElement('button');
+    close.className = 'eq-zoom-close'; close.textContent = '✕'; close.setAttribute('aria-label', 'Close');
+    box.appendChild(scroller); box.appendChild(close);
+    box.addEventListener('click', function (ev) { if (ev.target === box || ev.target === close || ev.target === scroller) box.remove(); });
+    // Inside .eq-page: the diagram's colours (--eq-*) are defined there.
+    (document.querySelector('.eq-page') || document.body).appendChild(box);
+  }
+
   window.setCover = function (on) {
     cover = !!on;
     var wrap = document.querySelector('.mf-wrap');
@@ -57,6 +75,8 @@
       e.preventDefault();
       return;
     }
+    var fig = t.closest('.eq-diagram svg');
+    if (fig) { openDiagram(fig); e.preventDefault(); return; }
     if (!cover) return;
     var cv = t.closest('[data-cv]');
     if (cv) { cv.classList.toggle(cv.getAttribute('data-cv')); return; }

@@ -26,7 +26,7 @@
   background: var(--surface-glass);
   color: var(--text-2);
   font-family: var(--font-body);
-  font-size: 0.78rem; font-weight: 600;
+  font-size: 0.9rem; font-weight: 600;
   transition: color 0.2s, border-color 0.2s, background 0.2s;
 }
 .eq-jump-chip:hover {
@@ -50,16 +50,16 @@
   border-radius: 10px;
   background: var(--accent-light);
   color: var(--accent);
-  font-weight: 700; font-size: 0.9rem;
+  font-weight: 700; font-size: 1rem;
 }
 .eq-group-title {
   font-family: var(--font-display);
-  font-size: 1.15rem; font-weight: 700;
+  font-size: 1.3rem; font-weight: 700;
   color: var(--text);
   letter-spacing: -0.01em;
 }
 .eq-group-sub {
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   color: var(--text-3);
   margin-top: 1px;
 }
@@ -80,21 +80,21 @@
   scrollbar-width: thin;
   scrollbar-color: var(--border-md) transparent;
 }
-/* The diagram fills the card edge to edge on the phone — the web's 560px floor and
-   720px cap assume a desktop column and leave ugly centred gutters at 480dp. */
+/* A diagram is drawn on a 640-unit canvas with ~11-13 unit labels. Squeezed into a 340px card it halves them past
+   readable, so it keeps a floor (like the web's 560px) and scrolls sideways instead. */
 .eq-diagram svg {
   display: block;
   width: 100%;
-  min-width: 0;
-  max-width: 100%;
+  min-width: 680px;
+  max-width: 760px;
   height: auto;
   margin: 0 auto;
   font-family: var(--font-body);
 }
 .eq-diagram figcaption {
   margin-top: 8px;
-  font-size: 0.78rem;
-  color: var(--text-3);
+  font-size: 0.92rem;
+  color: var(--text-2);
   text-align: center;
   line-height: 1.5;
 }
@@ -111,7 +111,8 @@
 }
 .eq-symbol {
   display: flex; align-items: baseline; gap: 8px;
-  font-size: 0.8rem;
+  font-size: 0.95rem;
+  line-height: 1.55;
   min-width: 0;
 }
 .eq-symbol dt {
@@ -134,8 +135,8 @@
   min-width: 0;
 }
 .eq-row-name {
-  font-size: 0.84rem; font-weight: 600;
-  color: var(--text-2);
+  font-size: 0.98rem; font-weight: 600;
+  color: var(--text);
 }
 /* No scroll box here: a fraction is taller than the line, so any overflow value
    other than visible grows scrollbars. A formula too wide for the row wraps
@@ -143,15 +144,15 @@
 .eq-row-formula {
   margin-left: auto;
   color: var(--accent);
-  font-size: 1rem;
+  font-size: 1.1rem;
   min-width: 0;
   max-width: 100%;
 }
 .eq-row-note {
   flex-basis: 100%;
-  font-size: 0.78rem;
-  color: var(--text-3);
-  line-height: 1.5;
+  font-size: 0.92rem;
+  color: var(--text-2);
+  line-height: 1.65;
 }
 .eq-rhs { display: inline-block; max-width: 100%; }
 .eq-tex .katex, .eq-tex .katex * { color: inherit; }
@@ -165,7 +166,7 @@
   border-radius: 10px;
   border-left: 3px solid var(--eq-2);
   background: var(--ok-tint);
-  font-size: 0.8rem;
+  font-size: 0.95rem;
   color: var(--text-2);
   line-height: 1.55;
 }

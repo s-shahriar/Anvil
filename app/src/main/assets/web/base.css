@@ -2,6 +2,9 @@
 @font-face { font-family: 'Plus Jakarta Sans'; src: url(fonts/plus_jakarta_sans_regular.ttf); font-weight: 400; }
 @font-face { font-family: 'Plus Jakarta Sans'; src: url(fonts/plus_jakarta_sans_semibold.ttf); font-weight: 600; }
 @font-face { font-family: 'Plus Jakarta Sans'; src: url(fonts/plus_jakarta_sans_bold.ttf); font-weight: 700; }
+@font-face { font-family: 'Inter'; src: url(fonts/inter_regular.ttf); font-weight: 400; }
+@font-face { font-family: 'Inter'; src: url(fonts/inter_medium.ttf); font-weight: 500; }
+@font-face { font-family: 'Inter'; src: url(fonts/inter_semibold.ttf); font-weight: 600 700; }
 @font-face { font-family: 'JetBrains Mono'; src: url(fonts/jetbrains_mono_regular.ttf); font-weight: 400; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
@@ -17,3 +20,12 @@ button { font-family: inherit; }
 .hl-whole { display: inline-block; }
 .hl-c-mint { background: var(--hl-mint); } .hl-c-amber { background: var(--hl-amber); }
 .hl-c-rose { background: var(--hl-rose); } .hl-c-violet { background: var(--hl-violet); }
+/* Tap-to-enlarge diagram (controller.js openDiagram). */
+.eq-diagram { position: relative; }
+.eq-diagram::after { content: '⤢ ট্যাপ করে বড় করুন'; position: absolute; top: 4px; right: 4px; padding: 2px 8px; border-radius: 10px;
+  font-size: 0.72rem; color: var(--text-3); background: var(--surface-glass); border: 1px solid var(--border); pointer-events: none; }
+.eq-zoom { position: fixed; inset: 0; z-index: 1000; background: var(--bg); }
+.eq-zoom-scroll { position: absolute; inset: 0; overflow: auto; padding: 56px 12px 24px; -webkit-overflow-scrolling: touch; }
+.eq-zoom-scroll svg { display: block; width: 900px; min-width: 900px; max-width: none; height: auto; }
+.eq-zoom-close { position: absolute; top: 10px; right: 10px; width: 40px; height: 40px; border-radius: 20px; border: 1px solid var(--border-md);
+  background: var(--surface); color: var(--text); font-size: 1.1rem; }

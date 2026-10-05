@@ -50,7 +50,7 @@ internal fun themeVariables(p: Palette, dark: Boolean): String = buildString {
     v("imp", hex(p.imp)); v("imp-tint", rgba(p.imp, .12f)); v("ok", hex(p.ok)); v("ok-tint", rgba(p.ok, .12f))
     v("warn", hex(p.warn)); v("bad", hex(p.bad)); v("info", hex(p.info))
     v("hover-bg", rgba(p.primary, .07f)); v("surface-glass", rgba(p.surface, .97f)); v("shadow-sm", "0 1px 2px rgba(0,0,0,.05)")
-    v("font-body", "'Plus Jakarta Sans','Noto Sans Bengali',system-ui,sans-serif"); v("font-display", "'Plus Jakarta Sans','Noto Sans Bengali',system-ui,sans-serif")
+    v("font-body", "'Inter','Noto Sans Bengali',system-ui,sans-serif"); v("font-display", "'Plus Jakarta Sans','Noto Sans Bengali',system-ui,sans-serif")
     for (n in 1..12) v("topic-$n", hex(TopicColors.of(n, dark)))
     for (c in com.syed.slate.highlight.HIGHLIGHT_COLORS) v("hl-$c", (if (dark) com.syed.slate.ui.theme.Highlights.dark(c) else com.syed.slate.ui.theme.Highlights.light(c)).fill.let { rgba(it, it.alpha) })
     append("}")
