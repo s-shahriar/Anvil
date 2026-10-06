@@ -1,5 +1,9 @@
 package com.syed.slate.ui.highlight
 
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -216,6 +220,7 @@ fun HText(
     raw: String = text,
     toRaw: IntArray? = null,
     softWrap: Boolean = true,
+    onTap: (() -> Unit)? = null,
 ) {
     val ctl = LocalHighlights.current
     val byUid by (ctl?.repo?.byUid ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyMap()) }).collectAsState()
@@ -295,11 +300,34 @@ fun HText(
                 }
             }
         },
-        readOnly = true, textStyle = resolved, cursorBrush = SolidColor(Color.Transparent), modifier = modifier.then(edges),
+        readOnly = true, textStyle = resolved, cursorBrush = SolidColor(Color.Transparent),
+        modifier = modifier.then(edges).then(if (onTap == null) Modifier else Modifier.tapThrough(scope, { ctl.target == null }, onTap)),
         onTextLayout = { layoutState.value = it },
     )
     }
 }
+
+/**
+ * A plain quick tap on selectable text, passed on as [onTap] (e.g. folding the card it sits in). The events are only
+ * watched, never consumed, so long-press selection and its handles work as before. It fires only when no colour bar was
+ * up before the tap and none is up just after it, so tapping a mark or dismissing a bar never counts.
+ */
+private fun Modifier.tapThrough(scope: kotlinx.coroutines.CoroutineScope, idle: () -> Boolean, onTap: () -> Unit): Modifier =
+    pointerInput(onTap) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            val wasIdle = idle()
+            var tap = true
+            while (true) {
+                val ev = awaitPointerEvent(PointerEventPass.Initial)
+                val c = ev.changes.firstOrNull { it.id == down.id } ?: break
+                if ((c.position - down.position).getDistance() > viewConfiguration.touchSlop) tap = false
+                if (c.uptimeMillis - down.uptimeMillis > 300) tap = false
+                if (!c.pressed) break
+            }
+            if (tap && wasIdle) scope.launch { delay(120); if (idle()) onTap() }
+        }
+    }
 
 /**
  * The web's marks have a solid bar under the tint in the swatch's stronger edge colour (`box-shadow: inset 0 -.13em`), which

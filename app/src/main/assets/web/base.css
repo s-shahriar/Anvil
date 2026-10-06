@@ -22,10 +22,7 @@ button { font-family: inherit; }
 .hl-whole { display: inline-block; }
 .hl-c-mint { background: var(--hl-mint); } .hl-c-amber { background: var(--hl-amber); }
 .hl-c-rose { background: var(--hl-rose); } .hl-c-violet { background: var(--hl-violet); }
-/* Tap-to-enlarge diagram (controller.js openDiagram). */
-.eq-diagram { position: relative; }
-.eq-diagram::after { content: '⤢ ট্যাপ করে বড় করুন'; position: absolute; top: 4px; right: 4px; padding: 2px 8px; border-radius: 10px;
-  font-size: 0.72rem; color: var(--text-3); background: var(--surface-glass); border: 1px solid var(--border); pointer-events: none; }
+/* Tap-to-enlarge diagram (controller.js openDiagram) — no on-screen hint label. */
 .eq-zoom { position: fixed; inset: 0; z-index: 1000; background: var(--bg); }
 .eq-zoom-scroll { position: absolute; inset: 0; overflow: auto; padding: 56px 12px 24px; -webkit-overflow-scrolling: touch; }
 .eq-zoom-scroll svg { display: block; width: 900px; min-width: 900px; max-width: none; height: auto; }

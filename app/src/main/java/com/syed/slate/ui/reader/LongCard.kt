@@ -60,8 +60,9 @@ fun LongCard(
         Row(Modifier.fillMaxWidth().clickable(onClick = onToggle), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
             number?.let { Text("Q$it", style = MaterialTheme.typography.labelLarge, color = primary, modifier = Modifier.padding(top = 3.dp)) }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Collapsed, the question is plain text so a tap anywhere on it opens the card; open, it can be highlighted.
-                QuestionTextBlocks(item.question, uid = item.uid, editable = open)
+                // Collapsed, the question is plain text so a tap anywhere on it opens the card; open, it can be highlighted,
+                // and a plain tap on it still folds the card (long-press selects as before).
+                QuestionTextBlocks(item.question, uid = item.uid, editable = open, onTap = onToggle)
                 item.verdict?.let {
                     Text(it, Modifier.clip(MaterialTheme.shapes.small).background(p.primaryContainer).padding(horizontal = 10.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelLarge, color = p.onPrimaryContainer)

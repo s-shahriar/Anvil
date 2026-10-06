@@ -183,15 +183,15 @@ private fun AnswerImage(path: String) {
  * otherwise each line is `q.<index>` (the index counts the gaps too, so it matches the web's saved highlights).
  */
 @Composable
-fun QuestionTextBlocks(text: String, modifier: Modifier = Modifier, uid: String? = null, editable: Boolean = true, compact: Boolean = false) {
+fun QuestionTextBlocks(text: String, modifier: Modifier = Modifier, uid: String? = null, editable: Boolean = true, compact: Boolean = false, onTap: (() -> Unit)? = null) {
     val small = androidx.compose.ui.text.TextStyle(fontSize = 13.5.sp, lineHeight = 20.sp)
     val blocks = remember(text) { splitQuestionBlocks(text) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
         blocks.forEachIndexed { i, b ->
             val key = if (blocks.size <= 1) "q" else "q.$i"
             when (b) {
-                is QBlock.Para -> HText(uid, key, b.text, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium).let { if (compact) it.merge(small) else it }, editable = editable)
-                is QBlock.ListItem -> HText(uid, key, b.text, Modifier.padding(start = 16.dp), style = MaterialTheme.typography.bodyMedium.let { if (compact) it.merge(small) else it }, editable = editable)
+                is QBlock.Para -> HText(uid, key, b.text, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium).let { if (compact) it.merge(small) else it }, editable = editable, onTap = onTap)
+                is QBlock.ListItem -> HText(uid, key, b.text, Modifier.padding(start = 16.dp), style = MaterialTheme.typography.bodyMedium.let { if (compact) it.merge(small) else it }, editable = editable, onTap = onTap)
                 QBlock.Gap -> Spacer(Modifier.height(6.dp))
             }
         }
