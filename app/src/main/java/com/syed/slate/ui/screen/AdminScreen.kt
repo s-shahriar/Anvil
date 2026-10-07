@@ -60,6 +60,7 @@ import com.syed.slate.ModuleServices
 import com.syed.slate.backend.ModuleId
 import com.syed.slate.backend.Postgrest
 import com.syed.slate.content.ContentState
+import com.syed.slate.content.Item
 import com.syed.slate.content.LivemcqClassifier
 import com.syed.slate.core.Uid
 import com.syed.slate.ui.SlateViewModel
@@ -135,6 +136,57 @@ object LivemcqAdmin {
         ).map { rowOf(it) }.sortedWith(compareByDescending<Row> { it.createdAt }.thenByDescending { it.favoriteId?.toIntOrNull() ?: -1 })
     }
 
+    // ── Imports (the "Last import" view) ──────────────────────────────────────
+    //
+    // Grouping rows into imports used to happen on the client, over every livemcq
+    // row it had downloaded. It lives in SQL now: `livemcq_import_batches()` groups
+    // by the same 10-minute insert gap and returns ~35 small rows for the picker,
+    // and `livemcq_import_questions(key)` returns ONLY the picked import's
+    // questions, whole. Picking another import is one small query, not a rescan.
+
+    /** One import, as the picker shows it. [key] is the id of its earliest row. */
+    class Batch(val key: String, val at: Long, val count: Int)
+
+    suspend fun fetchBatches(db: Postgrest): List<Batch> = withContext(Dispatchers.IO) {
+        val arr = JSONArray(db.rpc("livemcq_import_batches", JSONObject()))
+        List(arr.length()) { arr.getJSONObject(it) }.map { b ->
+            Batch(b.getString("key"), tsOf(b.optString("at")), b.optInt("n"))
+        }
+    }
+
+    /**
+     * One import's questions, whole: the manage row plus the study [Item] behind it.
+     * The item is null for a recycle-binned row, which reads as a plain row instead.
+     * A null [key] — or one whose rows are all gone — returns the newest import.
+     */
+    suspend fun fetchBatchQuestions(db: Postgrest, key: String?): List<Pair<Row, Item?>> = withContext(Dispatchers.IO) {
+        val body = JSONObject().put("batch_key", key ?: JSONObject.NULL)
+        val arr = JSONArray(db.rpc("livemcq_import_questions", body))
+        List(arr.length()) { arr.getJSONObject(it) }.map { r ->
+            val extra = r.optJSONObject("extra")
+            val deleted = !r.isNull("deleted_at")
+            val row = Row(
+                id = r.getString("id"),
+                favoriteId = extra?.optString("favorite_id")?.takeIf { it.isNotEmpty() },
+                question = r.optString("question"),
+                correctAnswerText = r.optString("correct_answer_text").ifEmpty { null },
+                correctAnswer = if (r.isNull("correct_answer")) null else r.optString("correct_answer").ifEmpty { null },
+                subtopic = extra?.optString("subtopic")?.takeIf { it.isNotEmpty() },
+                deleted = deleted,
+                createdAt = tsOf(r.optString("created_at")),
+                slug = r.getString("slug"),
+                catName = r.optString("cat_name"),
+            )
+            val item = if (deleted) null else Item(
+                row.id, r.optString("uid").ifEmpty { null }, "livemcq", row.slug, r.optInt("sort_order"), r,
+            )
+            row to item
+        }
+    }
+
+    private fun tsOf(iso: String): Long =
+        runCatching { Instant.parse(iso).toEpochMilli() }.getOrDefault(0L)
+
     /** The one row behind a uid — the per-card "Topic" edit starts here. */
     suspend fun fetchByUid(db: Postgrest, uid: String): Row? = withContext(Dispatchers.IO) {
         db.selectAll(
@@ -153,7 +205,7 @@ object LivemcqAdmin {
             correctAnswer = if (r.isNull("correct_answer")) null else r.optString("correct_answer").ifEmpty { null },
             subtopic = extra?.optString("subtopic")?.takeIf { it.isNotEmpty() },
             deleted = !r.isNull("deleted_at"),
-            createdAt = runCatching { Instant.parse(r.optString("created_at")).toEpochMilli() }.getOrDefault(0L),
+            createdAt = tsOf(r.optString("created_at")),
             slug = r.getJSONObject("categories").getString("slug"),
             catName = r.getJSONObject("categories").getString("name"),
         )
@@ -231,22 +283,6 @@ object LivemcqAdmin {
 }
 
 
-/** One import: rows inserted within 10 minutes of each other (the web's groupImports), newest first. */
-class ImportBatch(val key: Long, val at: Long, val ids: Set<String>) { val count get() = ids.size }
-
-private const val IMPORT_GAP_MS = 10 * 60 * 1000L
-
-fun groupImports(rows: List<LivemcqAdmin.Row>): List<ImportBatch> {
-    val dated = rows.filter { it.createdAt > 0 }.sortedBy { it.createdAt }
-    val out = mutableListOf<Triple<Long, MutableSet<String>, LongArray>>() // key, ids, [last]
-    for (r in dated) {
-        val cur = out.lastOrNull()
-        if (cur == null || r.createdAt - cur.third[0] > IMPORT_GAP_MS) out.add(Triple(r.createdAt, mutableSetOf(r.id), longArrayOf(r.createdAt)))
-        else { cur.second.add(r.id); cur.third[0] = r.createdAt }
-    }
-    return out.reversed().map { ImportBatch(it.first, it.first, it.second) }
-}
-
 private val PAGE_SIZE = 50
 private val STUDY_PAGE_SIZE = 20
 
@@ -290,10 +326,12 @@ fun AdminScreen(vm: SlateViewModel, onBack: () -> Unit) {
         }
     }
 
-    // Rows load the first time Manage / Last import is opened, and again when Import writes something.
+    // Manage needs every row, so it loads them the first time it is opened and
+    // again when Import writes something. Last import does NOT: it loads its
+    // batch list and the one import on screen, inside ManagePanel.
     var fetchedVersion by remember { mutableIntStateOf(-1) }
-    LaunchedEffect(owner, dataVersion, tab != "import") {
-        if (!owner || tab == "import" || (rows != null && fetchedVersion == dataVersion)) return@LaunchedEffect
+    LaunchedEffect(owner, dataVersion, tab == "manage") {
+        if (!owner || tab != "manage" || (rows != null && fetchedVersion == dataVersion)) return@LaunchedEffect
         try { rows = LivemcqAdmin.fetchRows(m.db); error = null; fetchedVersion = dataVersion } catch (e: Exception) { error = e.message ?: "Couldn't load" }
     }
     fun go(next: String) { tab = next; visited = visited + next }
@@ -362,7 +400,7 @@ private fun ManagePanel(
     var cat by rememberSaveable(importsOnly) { mutableStateOf("") }
     var subFilter by rememberSaveable(importsOnly) { mutableStateOf("") }
     var page by rememberSaveable(importsOnly) { mutableIntStateOf(0) }
-    var batchKey by rememberSaveable { mutableStateOf(0L) } // 0 = the newest
+    var batchKey by rememberSaveable { mutableStateOf("") } // "" = the newest
     var confirm by remember { mutableStateOf<LivemcqAdmin.Row?>(null) }
     var moving by remember { mutableStateOf<LivemcqAdmin.Row?>(null) }
     var subMoving by remember { mutableStateOf<LivemcqAdmin.Row?>(null) }
@@ -372,46 +410,68 @@ private fun ManagePanel(
     var notice by remember { mutableStateOf("") }
     var err by remember { mutableStateOf("") }
     val flags by m.progress.flags.collectAsState()
-    val contentState by m.content.state.collectAsState()
 
-    val rows = rowsIn
-    val rowsNow = rememberUpdatedState(rowsIn)
+    // Last import keeps its own rows: the picker's batches (~35 tiny rows), and the
+    // questions of the one import on screen — whole, so no content cache is needed.
+    // `loadedKey` says which import those rows belong to, so switching shows a
+    // loader instead of the previous import's questions under the new header.
+    var batches by remember { mutableStateOf<List<LivemcqAdmin.Batch>?>(null) }
+    var batchRows by remember { mutableStateOf<List<LivemcqAdmin.Row>?>(null) }
+    var batchItems by remember { mutableStateOf<Map<String, Item>>(emptyMap()) }
+    var loadedKey by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(importsOnly, dataVersion) {
+        if (!importsOnly) return@LaunchedEffect
+        try { batches = LivemcqAdmin.fetchBatches(m.db) } catch (e: Exception) { err = e.message ?: "Couldn't load imports" }
+    }
+
+    val active = if (importsOnly) batches?.firstOrNull { it.key == batchKey } ?: batches?.firstOrNull() else null
+    val activeKey = active?.key
+
+    // One import, one query — picking another in the dropdown fetches just that one.
+    LaunchedEffect(activeKey, dataVersion) {
+        val key = activeKey ?: return@LaunchedEffect
+        try {
+            val pairs = LivemcqAdmin.fetchBatchQuestions(m.db, key)
+            batchRows = pairs.map { it.first }
+            batchItems = pairs.mapNotNull { (r, item) -> item?.let { r.id to it } }.toMap()
+            loadedKey = key
+        } catch (e: Exception) { err = e.message ?: "Couldn't load this import" }
+    }
+
+    val rows = if (importsOnly) batchRows else rowsIn
+    val rowsNow = rememberUpdatedState(rows)
+    // Manage's rows live in the parent; Last import's live here.
+    val applyRows: (List<LivemcqAdmin.Row>) -> Unit = { if (importsOnly) batchRows = it else setRows(it) }
     if (errorIn != null) { Text(errorIn, Modifier.padding(16.dp), color = p.bad); return }
-    if (rows == null) {
+    if (if (importsOnly) batches == null else rows == null) {
         SlateLoader(Modifier.fillMaxWidth().padding(top = 80.dp), label = "Loading questions…")
         return
     }
-
-    val imports = remember(rows, importsOnly) { if (importsOnly) groupImports(rows) else emptyList() }
-    val active = if (importsOnly) imports.firstOrNull { it.key == batchKey } ?: imports.firstOrNull() else null
     if (importsOnly && active == null) { Text("No imports yet.", Modifier.padding(16.dp), color = p.text3); return }
 
-    val importCats = remember(active, rows) {
+    // The picked import's questions are still on the wire: the bar above the list
+    // is already right (it comes from the batch list), the list itself is not.
+    val batchLoading = importsOnly && (rows == null || loadedKey != activeKey)
+    val shownRows = rows.orEmpty()
+
+    val importCats = remember(active, shownRows) {
         if (active == null) null else {
-            val n = HashMap<String, Int>(); for (r in rows) if (r.id in active.ids) n[r.slug] = (n[r.slug] ?: 0) + 1
+            val n = HashMap<String, Int>(); for (r in shownRows) n[r.slug] = (n[r.slug] ?: 0) + 1
             catalog.topics.filter { n[it.first] != null }.map { it.first to "${it.second} (${n[it.first]})" }
         }
     }
 
-    // Last import reads as study cards, so it needs each question whole; the app's LiveMCQ cache has them by row id.
-    var triedRefresh by remember(active?.key, dataVersion) { mutableStateOf(false) }
-    val itemById = remember(contentState, importsOnly) {
-        if (!importsOnly) emptyMap() else {
-            val c = (contentState as? ContentState.Ready)?.content
-            c?.allItems()?.filter { it.group == "livemcq" }?.associateBy { it.id }.orEmpty()
-        }
-    }
-    LaunchedEffect(active?.key, itemById.size, dataVersion) {
-        if (active != null && !triedRefresh && active.ids.any { it !in itemById }) { triedRefresh = true; m.content.refresh() }
-    }
+    val itemById = if (importsOnly) batchItems else emptyMap()
 
-    val filtered = remember(rows, q, cat, subFilter, active) {
-        val needle = q.trim().lowercase()
-        rows.filter { r ->
-            if (active != null && r.id !in active.ids) return@filter false
-            if (cat.isNotEmpty() && r.slug != cat) return@filter false
-            if (cat.isNotEmpty() && subFilter.isNotEmpty() && (if (subFilter == NO_SUB) r.subtopic != null else r.subtopic != subFilter)) return@filter false
-            if (needle.isEmpty()) true else (r.favoriteId?.contains(needle) == true) || stripTags(r.question).lowercase().contains(needle)
+    val filtered = remember(shownRows, q, cat, subFilter, batchLoading) {
+        if (batchLoading) emptyList() else {
+            val needle = q.trim().lowercase()
+            shownRows.filter { r ->
+                if (cat.isNotEmpty() && r.slug != cat) return@filter false
+                if (cat.isNotEmpty() && subFilter.isNotEmpty() && (if (subFilter == NO_SUB) r.subtopic != null else r.subtopic != subFilter)) return@filter false
+                if (needle.isEmpty()) true else (r.favoriteId?.contains(needle) == true) || stripTags(r.question).lowercase().contains(needle)
+            }
         }
     }
     val pageSize = if (importsOnly) STUDY_PAGE_SIZE else PAGE_SIZE
@@ -419,7 +479,9 @@ private fun ManagePanel(
     val curPage = minOf(page, pageCount - 1)
     val start = curPage * pageSize
     val shown = filtered.drop(start).take(pageSize)
-    val total = active?.count ?: rows.size
+    // What the counts are "of": the import's own rows once they land, so a delete
+    // shows up immediately; the batch list's count until then.
+    val total = if (batchLoading) active?.count ?: 0 else shownRows.size
 
     fun record(row: LivemcqAdmin.Row, kind: String, text: String, toCat: String, error: String? = null, undo: (suspend () -> Unit)? = null) {
         m.progress.recordExternal(ProgressRepository.ExternalChange(
@@ -434,7 +496,7 @@ private fun ManagePanel(
         val fromSlug = row.slug; val fromSub = row.subtopic
         LivemcqAdmin.setCategory(m.db, listOf(fid), slug)
         if (restoreSub != null) LivemcqAdmin.setSubtopic(m.db, listOf(fid), restoreSub)
-        setRows((rowsNow.value ?: rows).map { r -> if (r.id == row.id) LivemcqAdmin.Row(r.id, r.favoriteId, r.question, r.correctAnswerText, r.correctAnswer, restoreSub, r.deleted, r.createdAt, slug, catalog.catName(slug)) else r })
+        applyRows((rowsNow.value ?: shownRows).map { r -> if (r.id == row.id) LivemcqAdmin.Row(r.id, r.favoriteId, r.question, r.correctAnswerText, r.correctAnswer, restoreSub, r.deleted, r.createdAt, slug, catalog.catName(slug)) else r })
         notice = "Moved fav $fid → ${catalog.catName(slug)}"
         val cur = LivemcqAdmin.Row(row.id, row.favoriteId, row.question, row.correctAnswerText, row.correctAnswer, restoreSub, row.deleted, row.createdAt, slug, catalog.catName(slug))
         record(row, "move", "Topic: ${catalog.catName(fromSlug)} → ${catalog.catName(slug)}", catalog.catName(slug)) {
@@ -447,7 +509,7 @@ private fun ManagePanel(
         val fid = row.favoriteId ?: return
         if ((sub ?: "") == (row.subtopic ?: "")) return
         LivemcqAdmin.setSubtopic(m.db, listOf(fid), sub)
-        setRows((rowsNow.value ?: rows).map { r -> if (r.id == row.id) LivemcqAdmin.Row(r.id, r.favoriteId, r.question, r.correctAnswerText, r.correctAnswer, sub, r.deleted, r.createdAt, r.slug, r.catName) else r })
+        applyRows((rowsNow.value ?: shownRows).map { r -> if (r.id == row.id) LivemcqAdmin.Row(r.id, r.favoriteId, r.question, r.correctAnswerText, r.correctAnswer, sub, r.deleted, r.createdAt, r.slug, r.catName) else r })
         notice = if (sub != null) "fav $fid → ${catalog.subName(row.slug, sub)}" else "fav $fid: sub-topic removed"
         val cur = LivemcqAdmin.Row(row.id, row.favoriteId, row.question, row.correctAnswerText, row.correctAnswer, sub, row.deleted, row.createdAt, row.slug, row.catName)
         val from = row.subtopic
@@ -457,7 +519,7 @@ private fun ManagePanel(
         scope.launch { m.content.refresh() }
     }
 
-    val studyList = importsOnly && itemById.isNotEmpty()
+    val studyList = importsOnly && !batchLoading
     val onMove: (LivemcqAdmin.Row) -> Unit = { moving = it }
     val onSub: (LivemcqAdmin.Row) -> Unit = { subMoving = it }
     val onDel: (LivemcqAdmin.Row) -> Unit = { confirm = it }
@@ -465,12 +527,13 @@ private fun ManagePanel(
     LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (active != null) item(key = "import-bar") {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.surface).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("${if (active === imports.first()) "Last import" else "Import"} · ${importWhen(active.at)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                val all = batches.orEmpty()
+                Text("${if (active === all.firstOrNull()) "Last import" else "Import"} · ${importWhen(active.at)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 val nc = importCats?.size ?: 0
-                Text("${active.count} question${if (active.count == 1) "" else "s"} across $nc categor${if (nc == 1) "y" else "ies"}", style = MaterialTheme.typography.bodyMedium, color = p.text3)
-                if (imports.size > 1) StyledSelect(
-                    active.key.toString(), imports.take(30).mapIndexed { i, b -> b.key.toString() to "${if (i == 0) "Latest · " else ""}${importWhen(b.at)} · ${b.count}" },
-                    { batchKey = it.toLong(); cat = ""; subFilter = ""; page = 0 }, Modifier.wrapContentWidth(),
+                Text("$total question${if (total == 1) "" else "s"} across $nc categor${if (nc == 1) "y" else "ies"}", style = MaterialTheme.typography.bodyMedium, color = p.text3)
+                if (all.size > 1) StyledSelect(
+                    active.key, all.take(30).mapIndexed { i, b -> b.key to "${if (i == 0) "Latest · " else ""}${importWhen(b.at)} · ${b.count}" },
+                    { batchKey = it; cat = ""; subFilter = ""; page = 0 }, Modifier.wrapContentWidth(),
                 )
             }
         }
@@ -508,7 +571,7 @@ private fun ManagePanel(
                 Icon(Icons.Filled.Close, "Dismiss", Modifier.size(16.dp).clickable { err = "" }, tint = p.bad)
             }
         }
-        item(key = "count") {
+        if (!batchLoading) item(key = "count") {
             val line = if (filtered.isEmpty()) AnnotatedString("No matches of $total") else buildAnnotatedString {
                 append("Showing "); pushStyle(SpanStyle(fontWeight = FontWeight.Bold, color = p.text2)); append("${start + 1}–${start + shown.size}"); pop()
                 append(" of ${filtered.size}"); if (filtered.size != total) append(" (filtered from $total)"); append(" · newest first")
@@ -516,7 +579,7 @@ private fun ManagePanel(
             }
             Text(line, style = MaterialTheme.typography.bodyMedium, color = p.text3)
         }
-        if (importsOnly && itemById.isEmpty()) item(key = "loadq") {
+        if (batchLoading) item(key = "loadq") {
             SlateLoader(Modifier.fillMaxWidth().padding(vertical = 24.dp), label = "Loading questions…", size = 32.dp)
         }
         itemsIndexed(shown, key = { _, r -> r.id }) { i, r ->
@@ -564,7 +627,7 @@ private fun ManagePanel(
                     deleting = true
                     try {
                         LivemcqAdmin.deleteFavoriteIds(m.db, listOf(r.favoriteId ?: ""))
-                        setRows((rowsNow.value ?: rows).filter { it.id != r.id }); scope.launch { m.content.refresh() }
+                        applyRows((rowsNow.value ?: shownRows).filter { it.id != r.id }); scope.launch { m.content.refresh() }
                         record(r, "delete", "Deleted permanently", r.catName)
                     } catch (e: Exception) { err = e.message ?: "Delete failed"; record(r, "delete", "Delete failed", r.catName, error = err) }
                     deleting = false; confirm = null

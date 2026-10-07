@@ -124,7 +124,7 @@ into the WebView (blocks are already tagged `data-hl-block`).
   `pending_ts_*.json`.
 - **LiveMCQ Admin** (`ui/screen/AdminScreen.kt`, port of the web's /admin; owner-gated by `LivemcqAdmin.OWNER_UID`,
   entry card in the LiveMCQ section): three tabs — Manage (search/filter, move category, set sub-topic, delete via the
-  admin_livemcq_* RPCs), Last import (the 10-minute grouping of `groupImports`), Import (LiveMCQ fetch or livefav JSON picker,
+  admin_livemcq_* RPCs), Last import (the 10-minute grouping, server-side in `livemcq_import_batches()`; the tab fetches the batch list and only the picked import's questions, via `livemcq_import_questions(key)`), Import (LiveMCQ fetch or livefav JSON picker,
   normalize + gap/range warnings, favorite_id de-dup, per-row category/sub-topic, bulk insert; uid via `Uid.general` =
   the web's qid.js so flags stay aligned). The tf-idf/kNN suggester is NOT ported — classification is manual + bulk.
 - **LiveMCQ fetch** (moved from Magpie 2026-10-07; Magpie no longer has the module): `content/LivemcqFavorites` reads
