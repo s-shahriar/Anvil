@@ -298,6 +298,12 @@ fun AdminScreen(vm: SlateViewModel, onBack: () -> Unit) {
     }
     fun go(next: String) { tab = next; visited = visited + next }
 
+    // livemcq.com sign-in for the Import tab's LiveMCQ source; full screen, back returns to the panel.
+    if (importState.login) {
+        LivemcqLogin { importState.login = false; importState.liveSignedIn = com.syed.slate.content.LivemcqFavorites.isSignedIn() }
+        return
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {

@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.ExpandMore
@@ -31,7 +32,12 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -55,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import com.syed.slate.ModuleServices
 import com.syed.slate.content.ContentState
 import com.syed.slate.content.LivemcqClassifier
+import com.syed.slate.content.LivemcqFavorites
 import com.syed.slate.content.Subtopic
 import com.syed.slate.progress.ProgressRepository
 import com.syed.slate.ui.component.SlateLoader
@@ -85,6 +92,17 @@ internal class ImportState {
     var hints by mutableStateOf(mapOf<String, LivemcqClassifier.Suggestion>())
     /** fid -> (category the sub-topic guess was scored against, the guess). */
     var subHints by mutableStateOf(mapOf<String, Pair<String, LivemcqClassifier.Suggestion?>>())
+
+    // ── The LiveMCQ source (favourites fetched straight from livemcq.com, no file in between) ──
+    /** The raw favourites of the last fetch, kept for "Save copy"; null when the items came from a file. */
+    var fetched by mutableStateOf<List<JSONObject>?>(null)
+    var login by mutableStateOf(false)
+    var liveSignedIn by mutableStateOf(LivemcqFavorites.isSignedIn())
+    var newOnly by mutableStateOf(true)
+    var count by mutableStateOf("50")
+    var progress by mutableStateOf<LivemcqFavorites.Progress?>(null)
+    var peek by mutableStateOf<String?>(null)
+    var copySaved by mutableStateOf<String?>(null)
 }
 
 private val TIER_LABEL = mapOf("strong" to "Likely", "likely" to "Probably", "weak" to "Maybe")
@@ -134,29 +152,38 @@ internal fun ImportPanel(
         if (add.isNotEmpty()) st.subHints = st.subHints + add
     }
 
+    fun reset() {
+        st.error = ""; st.result = null; st.summary = null; st.items = emptyList(); st.missing = emptySet()
+        st.hints = emptyMap(); st.subHints = emptyMap(); st.indexFor = null; st.fetched = null; st.copySaved = null; st.peek = null
+    }
+
+    /** File or LiveMCQ alike: normalize, drop what the DB (or the batch itself) already has, and list the rest. */
+    fun ingest(raw: List<Any?>, existing: Set<String>) {
+        val seen = HashSet<String>(); val next = ArrayList<ImportItem>()
+        var dupInDb = 0; var dupInFile = 0; var badFid = 0
+        for (r in raw) {
+            val norm = LivemcqAdmin.normalizeItem(r as? JSONObject ?: continue)
+            if (norm.favoriteId.isEmpty()) { badFid++; continue }
+            if (norm.favoriteId in existing) { dupInDb++; continue }
+            if (!seen.add(norm.favoriteId)) { dupInFile++; continue }
+            next.add(ImportItem(norm))
+        }
+        st.items = next
+        st.summary = ImportSummary(raw.size, dupInDb, dupInFile, badFid, next.size)
+    }
+
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
-            st.error = ""; st.result = null; st.summary = null; st.items = emptyList(); st.missing = emptySet(); st.hints = emptyMap(); st.subHints = emptyMap(); st.indexFor = null
+            reset()
             st.fileName = uri.lastPathSegment?.substringAfterLast('/') ?: "file"
             st.busy = true
             try {
-                val text = withContext(Dispatchers.IO) { ctx.contentResolver.openInputStream(uri)!!.bufferedReader().readText() }.trim().removePrefix("﻿")
+                val text = withContext(Dispatchers.IO) { ctx.contentResolver.openInputStream(uri)!!.bufferedReader().readText() }.trim().removePrefix("\uFEFF")
                 val parsed: Any = if (text.startsWith("[")) JSONArray(text) else JSONObject(text)
                 val raw = LivemcqAdmin.extractRawItems(parsed)
                 if (raw.isEmpty()) throw IllegalStateException("No questions found in the file.")
-                val existing = LivemcqAdmin.fetchExistingFavoriteIds(m.db)
-                val seen = HashSet<String>(); val next = ArrayList<ImportItem>()
-                var dupInDb = 0; var dupInFile = 0; var badFid = 0
-                for (r in raw) {
-                    val norm = LivemcqAdmin.normalizeItem(r as? JSONObject ?: continue)
-                    if (norm.favoriteId.isEmpty()) { badFid++; continue }
-                    if (norm.favoriteId in existing) { dupInDb++; continue }
-                    if (!seen.add(norm.favoriteId)) { dupInFile++; continue }
-                    next.add(ImportItem(norm))
-                }
-                st.items = next
-                st.summary = ImportSummary(raw.size, dupInDb, dupInFile, badFid, next.size)
+                ingest(raw, LivemcqAdmin.fetchExistingFavoriteIds(m.db))
             } catch (e: Exception) {
                 st.error = e.message ?: e.toString(); st.fileName = ""
             }
@@ -164,6 +191,57 @@ internal fun ImportPanel(
         }
     }
 
+    fun fetchLive() {
+        if (st.busy) return
+        scope.launch {
+            reset()
+            st.busy = true; st.progress = null
+            try {
+                val existing = LivemcqAdmin.fetchExistingFavoriteIds(m.db)
+                val baseline = existing.mapNotNull { it.toLongOrNull() }.maxOrNull()
+                val want = if (st.newOnly) LivemcqFavorites.Scope.Since(baseline)
+                    else LivemcqFavorites.Scope.Newest(st.count.toIntOrNull()?.coerceIn(1, 5000) ?: 50)
+                val raw = LivemcqFavorites.fetchAll(want) { pr -> scope.launch(Dispatchers.Main.immediate) { st.progress = pr } }
+                if (raw.isEmpty()) throw IllegalStateException(
+                    if (st.newOnly) "No new favourites on LiveMCQ" + (baseline?.let { " — nothing above favourite $it, the newest stored." } ?: ".")
+                    else "The LiveMCQ account has no favourites.",
+                )
+                ingest(raw, existing)
+                st.fetched = raw
+                st.fileName = "LiveMCQ · ${raw.size} fetched"
+            } catch (e: LivemcqFavorites.NotSignedIn) {
+                st.liveSignedIn = false; st.error = "The LiveMCQ session has expired — sign in again."
+            } catch (e: Exception) {
+                st.error = e.message ?: e.toString()
+            }
+            st.busy = false; st.progress = null
+        }
+    }
+
+    fun checkAccount() {
+        if (st.busy) return
+        scope.launch {
+            st.busy = true; st.error = ""; st.peek = null
+            try {
+                val pk = LivemcqFavorites.peek()
+                val stored = LivemcqAdmin.fetchExistingFavoriteIds(m.db).mapNotNull { it.toLongOrNull() }.maxOrNull()
+                st.peek = "${pk.total} favourites on LiveMCQ (${pk.pages} pages)" +
+                    (pk.newest?.let { " · newest $it" } ?: "") + (stored?.let { " · newest stored $it" } ?: "")
+            } catch (e: LivemcqFavorites.NotSignedIn) {
+                st.liveSignedIn = false; st.error = "The LiveMCQ session has expired — sign in again."
+            } catch (e: Exception) {
+                st.error = e.message ?: e.toString()
+            }
+            st.busy = false
+        }
+    }
+
+    fun saveCopy() {
+        val raw = st.fetched ?: return
+        scope.launch {
+            try { st.copySaved = "Saved ${LivemcqFavorites.saveCopy(ctx, raw)}" } catch (e: Exception) { st.error = e.message ?: e.toString() }
+        }
+    }
     val items = st.items
     val picked = items.filter { it.picked }
     val pickedNoCat = picked.filter { it.slug.isEmpty() }
@@ -284,31 +362,40 @@ internal fun ImportPanel(
         ) {
             // HEADER_ITEMS items precede the question cards (keep in step with scrollTo).
             item(key = "upload") {
-                if (st.fileName.isEmpty() && items.isEmpty()) Column(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(p.surface).border(1.dp, p.outline, RoundedCornerShape(22.dp))
-                        .clickable(enabled = !st.busy) { pick.launch("*/*") }.padding(horizontal = 20.dp, vertical = 28.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Box(Modifier.size(56.dp).clip(CircleShape).background(p.primary.copy(alpha = .14f)), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.FileUpload, null, Modifier.size(26.dp), tint = p.primary)
+                if (st.fileName.isEmpty() && items.isEmpty()) Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    LiveSourceCard(st, onFetch = { fetchLive() }, onCheck = { checkAccount() })
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.surface).border(1.dp, p.outline, RoundedCornerShape(18.dp))
+                            .clickable(enabled = !st.busy) { pick.launch("*/*") }.padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Box(Modifier.size(40.dp).clip(CircleShape).background(p.primary.copy(alpha = .14f)), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.FileUpload, null, Modifier.size(20.dp), tint = p.primary)
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text("Or choose a livefav JSON", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                            Text("A file saved earlier; checked against the database the same way.", style = MaterialTheme.typography.bodySmall, color = p.text3)
+                        }
                     }
-                    Text("Choose a livefav JSON", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text("Questions are checked against the database, then you classify and insert them.", style = MaterialTheme.typography.bodySmall, color = p.text3, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 } else Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(p.surface).padding(horizontal = 14.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Icon(Icons.Filled.FileUpload, null, Modifier.size(18.dp), tint = p.primary)
+                    Icon(if (st.fetched != null) Icons.Filled.CloudDownload else Icons.Filled.FileUpload, null, Modifier.size(18.dp), tint = p.primary)
                     Text(st.fileName.ifEmpty { "livefav" }, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (st.fetched != null && st.copySaved == null) Text(
+                        "Save copy", Modifier.clip(CircleShape).border(1.dp, p.outline, CircleShape).clickable(enabled = !st.busy) { saveCopy() }.padding(horizontal = 12.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelLarge, color = p.text2, fontWeight = FontWeight.SemiBold,
+                    )
                     Text(
-                        "Change", Modifier.clip(CircleShape).border(1.dp, p.outline, CircleShape).clickable(enabled = !st.busy) { pick.launch("*/*") }.padding(horizontal = 12.dp, vertical = 6.dp),
+                        "Change", Modifier.clip(CircleShape).border(1.dp, p.outline, CircleShape).clickable(enabled = !st.busy) { reset(); st.fileName = "" }.padding(horizontal = 12.dp, vertical = 6.dp),
                         style = MaterialTheme.typography.labelLarge, color = p.text2, fontWeight = FontWeight.SemiBold,
                     )
                 }
             }
             item(key = "status") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (st.busy && items.isEmpty()) SlateLoader(Modifier.fillMaxWidth().padding(vertical = 24.dp), label = "Reading the file…", size = 32.dp)
+                    if (st.busy && items.isEmpty() && st.fileName.isNotEmpty()) SlateLoader(Modifier.fillMaxWidth().padding(vertical = 24.dp), label = "Reading the file…", size = 32.dp)
                     if (st.error.isNotEmpty()) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(p.bad.copy(alpha = .12f)).padding(12.dp), verticalAlignment = Alignment.Top) {
                         Icon(Icons.Filled.ErrorOutline, null, Modifier.size(15.dp), tint = p.bad)
                         Text(st.error, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodySmall, color = p.bad)
@@ -319,12 +406,13 @@ internal fun ImportPanel(
                             Text(r, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodySmall, color = p.ok)
                         }
                     }
+                    st.copySaved?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = p.text3) }
                     st.summary?.let { sm ->
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Chip("${sm.total} in file", p.text2, p.elevated)
+                            Chip(if (st.fetched != null) "${sm.total} fetched" else "${sm.total} in file", p.text2, p.elevated)
                             Chip("${sm.fresh} new", p.ok, p.ok.copy(alpha = .14f))
                             if (sm.dupInDb > 0) Chip("${sm.dupInDb} already in DB", p.text3, p.elevated)
-                            if (sm.dupInFile > 0) Chip("${sm.dupInFile} dup in file", p.warn, p.warn.copy(alpha = .14f))
+                            if (sm.dupInFile > 0) Chip("${sm.dupInFile} dup in ${if (st.fetched != null) "batch" else "file"}", p.warn, p.warn.copy(alpha = .14f))
                             if (sm.badFid > 0) Chip("${sm.badFid} no favorite_id", p.bad, p.bad.copy(alpha = .14f))
                         }
                     }
@@ -529,4 +617,83 @@ private fun SuggestionChip(
         },
         color, color.copy(alpha = .14f), icon = Icons.Filled.AutoFixHigh, onClick = onApply,
     )
+}
+
+/**
+ * The LiveMCQ source: favourites straight off livemcq.com (formerly Magpie's export module). "New" reads pages
+ * newest-first and stops at the highest favorite_id already stored, so the database itself is the baseline.
+ */
+@Composable
+private fun LiveSourceCard(st: ImportState, onFetch: () -> Unit, onCheck: () -> Unit) {
+    val p = LocalPalette.current
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(p.surface).border(1.dp, p.outline, RoundedCornerShape(22.dp)).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.size(44.dp).clip(CircleShape).background(p.primary.copy(alpha = .14f)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.CloudDownload, null, Modifier.size(22.dp), tint = p.primary)
+            }
+            Column(Modifier.weight(1f)) {
+                Text("Fetch from LiveMCQ", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (st.liveSignedIn) "Signed in · your favourites, checked against the database" else "Sign in once; the session stays on this phone",
+                    style = MaterialTheme.typography.bodySmall, color = if (st.liveSignedIn) p.ok else p.text3,
+                )
+            }
+            if (st.liveSignedIn) Text(
+                "Sign out", Modifier.clip(CircleShape).clickable(enabled = !st.busy) { LivemcqFavorites.signOut { st.liveSignedIn = false } }
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                style = MaterialTheme.typography.labelMedium, color = p.text3, fontWeight = FontWeight.SemiBold,
+            )
+        }
+        if (!st.liveSignedIn) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                ModalButton("Sign in to LiveMCQ", true, tint = p.primary, icon = Icons.AutoMirrored.Filled.Login) { st.login = true }
+            }
+            return@Column
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ScopeOption("New since last import", "Above the newest stored", st.newOnly, !st.busy, Modifier.weight(1f)) { st.newOnly = true }
+            ScopeOption("Newest by count", "Stored or not", !st.newOnly, !st.busy, Modifier.weight(1f)) { st.newOnly = false }
+        }
+        if (!st.newOnly) OutlinedTextField(
+            value = st.count, onValueChange = { v -> st.count = v.filter { it.isDigit() }.take(4) },
+            label = { Text("How many") }, singleLine = true, enabled = !st.busy,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth(),
+        )
+        st.progress?.let { pr ->
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                LinearProgressIndicator(
+                    progress = { if (pr.pages > 0) pr.page.toFloat() / pr.pages else 0f }, Modifier.fillMaxWidth(),
+                    color = p.primary, trackColor = p.primary.copy(alpha = .16f),
+                )
+                Text("Page ${pr.page} of ${pr.pages} · ${pr.questions} question${if (pr.questions == 1) "" else "s"}", style = MaterialTheme.typography.labelSmall, color = p.text3)
+            }
+        }
+        st.peek?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = p.text2) }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Check account", Modifier.clip(CircleShape).clickable(enabled = !st.busy, onClick = onCheck).padding(horizontal = 8.dp, vertical = 6.dp),
+                style = MaterialTheme.typography.labelLarge, color = p.primary, fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.weight(1f))
+            ModalButton(if (st.busy) "Fetching…" else "Fetch favourites", true, tint = p.primary, enabled = !st.busy, busy = st.busy, icon = Icons.Filled.CloudDownload, onClick = onFetch)
+        }
+    }
+}
+
+@Composable
+private fun ScopeOption(title: String, detail: String, selected: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val p = LocalPalette.current
+    Column(
+        modifier.clip(RoundedCornerShape(14.dp)).background(if (selected) p.primary.copy(alpha = .10f) else p.elevated)
+            .border(if (selected) 2.dp else 1.dp, if (selected) p.primary else p.outline, RoundedCornerShape(14.dp))
+            .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = if (selected) p.primary else p.text2)
+        Text(detail, style = MaterialTheme.typography.labelSmall, color = p.text3)
+    }
 }

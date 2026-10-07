@@ -124,9 +124,14 @@ into the WebView (blocks are already tagged `data-hl-block`).
   `pending_ts_*.json`.
 - **LiveMCQ Admin** (`ui/screen/AdminScreen.kt`, port of the web's /admin; owner-gated by `LivemcqAdmin.OWNER_UID`,
   entry card in the LiveMCQ section): three tabs — Manage (search/filter, move category, set sub-topic, delete via the
-  admin_livemcq_* RPCs), Last import (the 10-minute grouping of `groupImports`), Import (livefav JSON picker,
+  admin_livemcq_* RPCs), Last import (the 10-minute grouping of `groupImports`), Import (LiveMCQ fetch or livefav JSON picker,
   normalize + gap/range warnings, favorite_id de-dup, per-row category/sub-topic, bulk insert; uid via `Uid.general` =
   the web's qid.js so flags stay aligned). The tf-idf/kNN suggester is NOT ported — classification is manual + bulk.
+- **LiveMCQ fetch** (moved from Magpie 2026-10-07; Magpie no longer has the module): `content/LivemcqFavorites` reads
+  `livemcq.com/api/v1/central-favorite-list/` with the Django `sessionid` cookie from the app's WebView jar (sign in via
+  `LivemcqLogin`, phone + OTP form only; no Authorization header, or the session is ignored). "New" walks pages newest-first and
+  stops at the highest numeric favorite_id already in the DB (no local mark); "Newest by count" ignores the DB. Raw API objects
+  go straight into `normalizeItem` (it reads `option1..5`/`exp`). "Save copy" writes the livefav shape to Download/live_fav.
 - **Exam Random Mix** ("mix" pools every group), **Settings** shows Nailed/Important/Weak totals per module.
 - **Per-card Topic edit** (`StudyCard.onLiveMcqEdit`, owner + LiveMCQ only): fetches the row by uid and applies
   admin_livemcq_set_category / _set_subtopic, then `content.refresh()`. **QuestionPeek** (`ReaderScreen`): while an
