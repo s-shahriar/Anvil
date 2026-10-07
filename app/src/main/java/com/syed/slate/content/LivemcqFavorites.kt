@@ -32,8 +32,11 @@ object LivemcqFavorites {
     private const val FOLDER = "live_fav"
 
     sealed interface Scope {
-        /** Everything above [baseline] (the highest favorite_id already stored) — the usual run. */
-        data class Since(val baseline: Long?) : Scope
+        /**
+         * Everything not yet [stored] — the usual run. Pages are read until one holds nothing new; a max-id baseline
+         * would not do, since the DB has hand-made rows with placeholder favorite_ids (999000xxx) above every real one.
+         */
+        data class Since(val stored: Set<String>) : Scope
 
         /** The newest [count] favourites, stored or not. */
         data class Newest(val count: Int) : Scope
@@ -67,11 +70,11 @@ object LivemcqFavorites {
 
     /**
      * Walks pages newest-first until [scope] is satisfied. Favourites come back in descending favorite_id order,
-     * so "everything new" stops at the first id at or below the baseline instead of reading ~100 pages.
+     * so "everything new" stops at the first page that is entirely stored instead of reading ~100 pages.
      * Returns the raw API objects; [com.syed.slate.ui.screen.LivemcqAdmin.normalizeItem] reads them as they are.
      */
     suspend fun fetchAll(scope: Scope, onProgress: (Progress) -> Unit): List<JSONObject> = withContext(Dispatchers.IO) {
-        val baseline = (scope as? Scope.Since)?.baseline
+        val stored = (scope as? Scope.Since)?.stored
         val wanted = (scope as? Scope.Newest)?.count
         val taken = mutableListOf<JSONObject>()
         var page = 1
@@ -79,14 +82,14 @@ object LivemcqFavorites {
             val body = fetch(page)
             val pages = pages(body)
             val list = body.optJSONArray("question_list") ?: JSONArray()
-            var atBaseline = false
+            var fresh = 0
             for (i in 0 until list.length()) {
                 val q = list.optJSONObject(i) ?: continue
-                val fid = str(q, "favorite_id").toLongOrNull()
-                if (baseline != null && fid != null && fid <= baseline) { atBaseline = true; break }
+                if (stored != null) { if (str(q, "favorite_id") !in stored) { taken += q; fresh++ }; continue }
                 taken += q
                 if (wanted != null && taken.size >= wanted) break
             }
+            val atBaseline = stored != null && fresh == 0
             onProgress(Progress(page, pages, taken.size))
             if (atBaseline || (wanted != null && taken.size >= wanted) || list.length() == 0 || page >= pages) break
             page++

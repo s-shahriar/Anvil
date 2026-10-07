@@ -130,7 +130,7 @@ into the WebView (blocks are already tagged `data-hl-block`).
 - **LiveMCQ fetch** (moved from Magpie 2026-10-07; Magpie no longer has the module): `content/LivemcqFavorites` reads
   `livemcq.com/api/v1/central-favorite-list/` with the Django `sessionid` cookie from the app's WebView jar (sign in via
   `LivemcqLogin`, phone + OTP form only; no Authorization header, or the session is ignored). "New" walks pages newest-first and
-  stops at the highest numeric favorite_id already in the DB (no local mark); "Newest by count" ignores the DB. Raw API objects
+  stops at the first page whose favourites are all already in the DB (no local mark; a max-id baseline fails because hand-made rows carry placeholder fids 999000xxx); "Newest by count" ignores the DB. Raw API objects
   go straight into `normalizeItem` (it reads `option1..5`/`exp`). "Save copy" writes the livefav shape to Download/live_fav.
 - **Exam Random Mix** ("mix" pools every group), **Settings** shows Nailed/Important/Weak totals per module.
 - **Per-card Topic edit** (`StudyCard.onLiveMcqEdit`, owner + LiveMCQ only): fetches the row by uid and applies

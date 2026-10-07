@@ -15,6 +15,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -65,6 +73,8 @@ import com.syed.slate.content.LivemcqFavorites
 import com.syed.slate.content.Subtopic
 import com.syed.slate.progress.ProgressRepository
 import com.syed.slate.ui.component.SlateLoader
+import com.syed.slate.ui.component.SlateLoaderInline
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import com.syed.slate.ui.rich.RichText
 import com.syed.slate.ui.theme.LocalPalette
 import kotlinx.coroutines.Dispatchers
@@ -103,6 +113,10 @@ internal class ImportState {
     var progress by mutableStateOf<LivemcqFavorites.Progress?>(null)
     var peek by mutableStateOf<String?>(null)
     var copySaved by mutableStateOf<String?>(null)
+    /** The classifier index / hints are being computed: shows "Finding suggestions…" instead of chips popping in. */
+    var suggesting by mutableStateOf(false)
+    /** A valid bulk subset waiting on the "Insert N questions?" confirmation. */
+    var confirming by mutableStateOf<List<ImportItem>?>(null)
 }
 
 private val TIER_LABEL = mapOf("strong" to "Likely", "likely" to "Probably", "weak" to "Maybe")
@@ -126,13 +140,16 @@ internal fun ImportPanel(
     // The classifier: asked for only once a file is open; rebuilt when the corpus changes (after an insert / refresh).
     LaunchedEffect(content, st.items.isNotEmpty()) {
         if (content == null || st.items.isEmpty() || st.indexFor === content) return@LaunchedEffect
-        val idx = withContext(Dispatchers.Default) { LivemcqClassifier.build(content) }
-        st.index = idx; st.indexFor = content
-        val items = st.items
-        st.hints = withContext(Dispatchers.Default) {
-            items.mapNotNull { it -> idx.suggest(it.norm.question, it.norm.options, it.norm.explanation)?.let { s -> it.norm.favoriteId to s } }.toMap()
-        }
-        st.subHints = emptyMap()
+        st.suggesting = true
+        try {
+            val idx = withContext(Dispatchers.Default) { LivemcqClassifier.build(content) }
+            st.index = idx; st.indexFor = content
+            val items = st.items
+            st.hints = withContext(Dispatchers.Default) {
+                items.mapNotNull { it -> idx.suggest(it.norm.question, it.norm.options, it.norm.explanation)?.let { s -> it.norm.favoriteId to s } }.toMap()
+            }
+            st.subHints = emptyMap()
+        } finally { st.suggesting = false }
     }
     // Sub-topic guesses: scored against the picked category, or the suggested one before any is picked.
     LaunchedEffect(st.items, st.hints, st.index) {
@@ -198,17 +215,16 @@ internal fun ImportPanel(
             st.busy = true; st.progress = null
             try {
                 val existing = LivemcqAdmin.fetchExistingFavoriteIds(m.db)
-                val baseline = existing.mapNotNull { it.toLongOrNull() }.maxOrNull()
-                val want = if (st.newOnly) LivemcqFavorites.Scope.Since(baseline)
+                val want = if (st.newOnly) LivemcqFavorites.Scope.Since(existing)
                     else LivemcqFavorites.Scope.Newest(st.count.toIntOrNull()?.coerceIn(1, 5000) ?: 50)
                 val raw = LivemcqFavorites.fetchAll(want) { pr -> scope.launch(Dispatchers.Main.immediate) { st.progress = pr } }
                 if (raw.isEmpty()) throw IllegalStateException(
-                    if (st.newOnly) "No new favourites on LiveMCQ" + (baseline?.let { " — nothing above favourite $it, the newest stored." } ?: ".")
+                    if (st.newOnly) "No new favourites — everything on LiveMCQ is already stored."
                     else "The LiveMCQ account has no favourites.",
                 )
                 ingest(raw, existing)
                 st.fetched = raw
-                st.fileName = "LiveMCQ · ${raw.size} fetched"
+                st.fileName = "${raw.size} from LiveMCQ"
             } catch (e: LivemcqFavorites.NotSignedIn) {
                 st.liveSignedIn = false; st.error = "The LiveMCQ session has expired — sign in again."
             } catch (e: Exception) {
@@ -224,9 +240,7 @@ internal fun ImportPanel(
             st.busy = true; st.error = ""; st.peek = null
             try {
                 val pk = LivemcqFavorites.peek()
-                val stored = LivemcqAdmin.fetchExistingFavoriteIds(m.db).mapNotNull { it.toLongOrNull() }.maxOrNull()
-                st.peek = "${pk.total} favourites on LiveMCQ (${pk.pages} pages)" +
-                    (pk.newest?.let { " · newest $it" } ?: "") + (stored?.let { " · newest stored $it" } ?: "")
+                st.peek = "${pk.total} favs"
             } catch (e: LivemcqFavorites.NotSignedIn) {
                 st.liveSignedIn = false; st.error = "The LiveMCQ session has expired — sign in again."
             } catch (e: Exception) {
@@ -296,7 +310,8 @@ internal fun ImportPanel(
         scope.launch { scrollTo(inc.first().norm.favoriteId) }
     }
 
-    fun insertSubset(subset: List<ImportItem>) {
+    /** [ask]: the footer's bulk inserts stop at a confirmation once the subset is valid; a card's own Insert goes straight through. */
+    fun insertSubset(subset: List<ImportItem>, ask: Boolean = false) {
         st.error = ""; st.result = null
         if (subset.isEmpty()) { st.error = "Nothing selected — tick at least one question to insert."; return }
         val blanks = subset.filter { it.slug.isEmpty() }
@@ -315,6 +330,7 @@ internal fun ImportPanel(
             scope.launch { scrollTo(bad.first().norm.favoriteId) }
             return
         }
+        if (ask) { st.confirming = subset; return }
         scope.launch {
             st.busy = true
             try {
@@ -362,40 +378,14 @@ internal fun ImportPanel(
         ) {
             // HEADER_ITEMS items precede the question cards (keep in step with scrollTo).
             item(key = "upload") {
-                if (st.fileName.isEmpty() && items.isEmpty()) Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    LiveSourceCard(st, onFetch = { fetchLive() }, onCheck = { checkAccount() })
-                    Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.surface).border(1.dp, p.outline, RoundedCornerShape(18.dp))
-                            .clickable(enabled = !st.busy) { pick.launch("*/*") }.padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Box(Modifier.size(40.dp).clip(CircleShape).background(p.primary.copy(alpha = .14f)), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.FileUpload, null, Modifier.size(20.dp), tint = p.primary)
-                        }
-                        Column(Modifier.weight(1f)) {
-                            Text("Or choose a livefav JSON", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                            Text("A file saved earlier; checked against the database the same way.", style = MaterialTheme.typography.bodySmall, color = p.text3)
-                        }
-                    }
-                } else Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(p.surface).padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Icon(if (st.fetched != null) Icons.Filled.CloudDownload else Icons.Filled.FileUpload, null, Modifier.size(18.dp), tint = p.primary)
-                    Text(st.fileName.ifEmpty { "livefav" }, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (st.fetched != null && st.copySaved == null) Text(
-                        "Save copy", Modifier.clip(CircleShape).border(1.dp, p.outline, CircleShape).clickable(enabled = !st.busy) { saveCopy() }.padding(horizontal = 12.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.labelLarge, color = p.text2, fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        "Change", Modifier.clip(CircleShape).border(1.dp, p.outline, CircleShape).clickable(enabled = !st.busy) { reset(); st.fileName = "" }.padding(horizontal = 12.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.labelLarge, color = p.text2, fontWeight = FontWeight.SemiBold,
-                    )
-                }
+                SourceCard(
+                    st, onFetch = { fetchLive() }, onCheck = { checkAccount() }, onPick = { pick.launch("*/*") },
+                    onSaveCopy = { saveCopy() }, onChange = { reset(); st.fileName = "" },
+                )
             }
             item(key = "status") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (st.busy && items.isEmpty() && st.fileName.isNotEmpty()) SlateLoader(Modifier.fillMaxWidth().padding(vertical = 24.dp), label = "Reading the file…", size = 32.dp)
+                    if (st.busy && items.isEmpty() && st.fileName.isNotEmpty()) SlateLoader(Modifier.fillMaxWidth().padding(vertical = 24.dp), label = "Reading…", size = 32.dp)
                     if (st.error.isNotEmpty()) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(p.bad.copy(alpha = .12f)).padding(12.dp), verticalAlignment = Alignment.Top) {
                         Icon(Icons.Filled.ErrorOutline, null, Modifier.size(15.dp), tint = p.bad)
                         Text(st.error, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodySmall, color = p.bad)
@@ -407,27 +397,40 @@ internal fun ImportPanel(
                         }
                     }
                     st.copySaved?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = p.text3) }
+                    // The web's one muted line: "12 in file · 12 new · 3 already in DB".
                     st.summary?.let { sm ->
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Chip(if (st.fetched != null) "${sm.total} fetched" else "${sm.total} in file", p.text2, p.elevated)
-                            Chip("${sm.fresh} new", p.ok, p.ok.copy(alpha = .14f))
-                            if (sm.dupInDb > 0) Chip("${sm.dupInDb} already in DB", p.text3, p.elevated)
-                            if (sm.dupInFile > 0) Chip("${sm.dupInFile} dup in ${if (st.fetched != null) "batch" else "file"}", p.warn, p.warn.copy(alpha = .14f))
-                            if (sm.badFid > 0) Chip("${sm.badFid} no favorite_id", p.bad, p.bad.copy(alpha = .14f))
-                        }
+                        Text(
+                            buildAnnotatedString {
+                                append(if (st.fetched != null) "${sm.total} fetched · " else "${sm.total} in file · ")
+                                withStyle(SpanStyle(color = p.text, fontWeight = FontWeight.Bold)) { append("${sm.fresh} new") }
+                                if (sm.dupInDb > 0) append(" · ${sm.dupInDb} already in DB")
+                                if (sm.dupInFile > 0) append(" · ${sm.dupInFile} dup in ${if (st.fetched != null) "batch" else "file"}")
+                                if (sm.badFid > 0) append(" · ${sm.badFid} missing favorite_id")
+                            },
+                            style = MaterialTheme.typography.bodySmall, color = p.text3,
+                        )
                     }
                 }
             }
             item(key = "toolbar") {
-                if (items.isNotEmpty()) FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically,
-                ) {
-                    val all = picked.size == items.size
-                    GhostButton(if (all) "Clear" else "Select all", Icons.Filled.Check) { st.items = st.items.map { it.copy(picked = !all) } }
-                    if (hintable > 0) GhostButton("Suggest $hintable", Icons.Filled.AutoFixHigh) { applyAllHints() }
-                    if (subHintable > 0) GhostButton("Sub-topics $subHintable", Icons.Filled.Sell) { applyAllSubHints() }
-                    if (picked.isNotEmpty()) ChipSelect(
-                        "Category for ${picked.size}", bulkSlug, catalog.topics, { applyBulk(it) }, p.text2, p.surface,
+                if (items.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LinkText("Select all") { st.items = st.items.map { it.copy(picked = true) } }
+                        Text("·", style = MaterialTheme.typography.labelLarge, color = p.text3)
+                        LinkText("Clear") { st.items = st.items.map { it.copy(picked = false) } }
+                    }
+                    if (st.suggesting) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SlateLoaderInline(16.dp)
+                        Text("Finding suggestions…", style = MaterialTheme.typography.labelMedium, color = p.text3)
+                    }
+                    if (hintable > 0 || subHintable > 0) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (hintable > 0) GhostButton("Apply $hintable suggestion${if (hintable == 1) "" else "s"}", Icons.Filled.AutoFixHigh) { applyAllHints() }
+                        if (subHintable > 0) GhostButton("Apply $subHintable sub-topic suggestion${if (subHintable == 1) "" else "s"}", Icons.Filled.Sell) { applyAllSubHints() }
+                    }
+                    StyledSelect(
+                        bulkSlug, catalog.topics, { applyBulk(it) }, Modifier.fillMaxWidth(),
+                        placeholder = if (picked.isNotEmpty()) "Set category for ${picked.size} selected…" else "Select questions first…",
+                        optional = true, enabled = picked.isNotEmpty(),
                     )
                 }
             }
@@ -447,25 +450,52 @@ internal fun ImportPanel(
             }
         }
 
-        if (items.isNotEmpty()) Row(
+        if (items.isNotEmpty()) Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(p.surface).border(1.dp, p.outline).padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Column(Modifier.weight(1f)) {
-                Text("${picked.size} of ${items.size} selected", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                if (pickedNoCat.isNotEmpty() || pickedNoSub.isNotEmpty()) Text(
-                    listOfNotNull(
-                        pickedNoCat.size.takeIf { it > 0 }?.let { "$it need a category" },
-                        pickedNoSub.size.takeIf { it > 0 }?.let { "$it need a sub-topic" },
-                    ).joinToString(" · ") + " — show me",
-                    Modifier.clickable { jumpToBlank() }, style = MaterialTheme.typography.labelSmall, color = p.warn,
-                ) else Text(if (picked.isNotEmpty()) "all selected are ready" else "nothing selected", style = MaterialTheme.typography.labelSmall, color = p.text3)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = p.text, fontWeight = FontWeight.Bold)) { append("${picked.size}") }
+                        append(" of ${items.size} selected")
+                    },
+                    Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = p.text2, maxLines = 1,
+                )
+                if (pickedNoCat.isNotEmpty() || pickedNoSub.isNotEmpty()) Row(
+                    Modifier.clip(CircleShape).background(p.warn.copy(alpha = .14f)).clickable { jumpToBlank() }.padding(start = 10.dp, end = 6.dp, top = 5.dp, bottom = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Icon(Icons.Filled.ErrorOutline, null, Modifier.size(13.dp), tint = p.warn)
+                    Text(
+                        listOfNotNull(
+                            pickedNoCat.size.takeIf { it > 0 }?.let { "$it need${if (it == 1) "s" else ""} a category" },
+                            pickedNoSub.size.takeIf { it > 0 }?.let { "$it need${if (it == 1) "s" else ""} a sub-topic" },
+                        ).joinToString(" · "),
+                        style = MaterialTheme.typography.labelMedium, color = p.warn, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                    )
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(15.dp), tint = p.warn)
+                } else Text(if (picked.isNotEmpty()) "all ready" else "nothing selected", style = MaterialTheme.typography.labelMedium, color = p.text3)
             }
-            if (canPartial) ModalButton("Insert all ${picked.size}", false, enabled = !st.busy) { insertSubset(picked) }
-            ModalButton(
-                if (canPartial) "Insert ${pickedReady.size} ready" else "Insert ${picked.size}", true, tint = p.primary,
-                enabled = picked.isNotEmpty() && !st.busy, busy = st.busy, icon = Icons.Filled.Check,
-            ) { insertSubset(if (canPartial) pickedReady else picked) }
+            Row(Modifier.fillMaxWidth().height(46.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (canPartial) SourceButton("All ${picked.size}", Icons.Filled.Check, filled = false, enabled = !st.busy, modifier = Modifier.weight(1f)) { insertSubset(picked, ask = true) }
+                SourceButton(
+                    if (st.busy) "Inserting…" else if (canPartial) "Insert ${pickedReady.size} ready" else "Insert ${picked.size}",
+                    Icons.Filled.Check, filled = true, enabled = picked.isNotEmpty() && !st.busy, modifier = Modifier.weight(if (canPartial) 1.4f else 1f), tint = p.ok,
+                ) { insertSubset(if (canPartial) pickedReady else picked, ask = true) }
+            }
+        }
+
+        st.confirming?.let { subset ->
+            val n = subset.size
+            AdminModal(
+                Icons.Filled.Check, p.ok, "Insert $n question${if (n == 1) "" else "s"}?", busy = false, onCancel = { st.confirming = null },
+                meta = subset.groupBy { it.slug }.entries.sortedByDescending { it.value.size }.map { "${catalog.catName(it.key)} · ${it.value.size}" to true },
+                warn = "They go into the database and show up in the app straight away.",
+            ) {
+                ModalButton("Cancel", false) { st.confirming = null }
+                ModalButton("Insert $n", true, tint = p.ok, icon = Icons.Filled.Check) { st.confirming = null; insertSubset(subset) }
+            }
         }
     }
 }
@@ -485,6 +515,11 @@ private fun GhostButton(text: String, icon: androidx.compose.ui.graphics.vector.
     }
 }
 
+/**
+ * One question, laid out as the web's QuestionCard: always open — tick, #n, fav id and warnings; the question, its
+ * options and the ব্যাখ্যা toggle; the suggestion box; a full-width category select beside "Insert"; then the
+ * sub-topic suggestion and picker once a category is set.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ImportCard(
@@ -495,205 +530,233 @@ private fun ImportCard(
 ) {
     val p = LocalPalette.current
     val n = item.norm
-    var open by remember(n.favoriteId) { mutableStateOf(false) }
     var showExp by remember(n.favoriteId) { mutableStateOf(false) }
-    val expanded = open || flagged
     val bulkMin = LivemcqClassifier.BULK_APPLY_MIN
     val hintTaken = hint != null && item.slug == hint.slug
     // The sub-topic that rides along with the category suggestion — only while no category is picked.
     val pairedSub = if (item.slug.isEmpty() && subHint != null) subHint else null
     val edge = if (flagged) p.warn else if (item.picked) p.primary.copy(alpha = .55f) else p.outline
-    val hasWarning = !n.hasKey || n.gapWarning || n.answerOutOfRange
 
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.surface).border(if (flagged) 2.dp else 1.dp, edge, RoundedCornerShape(18.dp)).padding(12.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(p.surface)
+            .border(if (flagged) 2.dp else 1.dp, edge, RoundedCornerShape(16.dp)).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        // Collapsed header: tick · #n · the question (two lines) · chevron.
-        Row(Modifier.fillMaxWidth().clickable { open = !open }, verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp), itemVerticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(26.dp).clip(RoundedCornerShape(8.dp)).background(if (item.picked) p.primary else p.elevated)
-                    .border(1.5.dp, if (item.picked) p.primary else p.outline, RoundedCornerShape(8.dp)).clickable(onClick = onToggle),
+                Modifier.size(22.dp).clip(RoundedCornerShape(6.dp)).background(if (item.picked) p.primary else p.elevated)
+                    .border(1.5.dp, if (item.picked) p.primary else p.outline, RoundedCornerShape(6.dp)).clickable(onClick = onToggle),
                 contentAlignment = Alignment.Center,
-            ) { if (item.picked) Icon(Icons.Filled.Check, "Selected", Modifier.size(16.dp), tint = p.onPrimary) }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    "${stripTags(n.question).ifEmpty { "(image-only)" }}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium,
-                    maxLines = if (expanded) 6 else 2, overflow = TextOverflow.Ellipsis,
-                )
-                Text("#$index · fav ${n.favoriteId}", style = MaterialTheme.typography.labelSmall, color = p.text3)
-            }
-            if (hasWarning) Icon(Icons.Filled.Warning, "Needs a look", Modifier.size(18.dp), tint = p.warn)
-            Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, if (expanded) "Collapse" else "Expand", Modifier.size(22.dp), tint = p.text3)
+            ) { if (item.picked) Icon(Icons.Filled.Check, "Selected", Modifier.size(14.dp), tint = p.onPrimary) }
+            Text("#$index", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = p.text2)
+            Chip("fav ${n.favoriteId}", p.text3, p.elevated, mono = true)
+            if (!n.hasKey) Chip("no correct answer → null", p.warn, p.warn.copy(alpha = .14f), icon = Icons.Filled.Warning)
+            if (n.gapWarning) Chip("empty option before a filled one", p.bad, p.bad.copy(alpha = .14f), icon = Icons.Filled.Warning)
+            if (n.answerOutOfRange) Chip("answer index out of range", p.bad, p.bad.copy(alpha = .14f), icon = Icons.Filled.Warning)
         }
 
-        // One compact control row: category, sub-topic (when the category has them) and the single suggestion.
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-            ChipSelect(
-                if (item.slug.isEmpty()) "Category" else catalog.catName(item.slug), item.slug, catalog.topics, onSlug,
-                if (item.slug.isEmpty()) (if (flagged) p.warn else p.text3) else p.text2,
-                if (item.slug.isEmpty()) (if (flagged) p.warn.copy(alpha = .14f) else p.elevated) else p.elevated,
-            )
-            if (item.slug.isNotEmpty() && subRequired) {
-                val sel = item.subtopic.takeIf { it.isNotEmpty() && it != NO_SUB }
-                ChipSelect(
-                    sel?.let { catalog.subName(item.slug, it) } ?: if (item.subtopic == NO_SUB) "no sub-topic" else "Sub-topic",
-                    item.subtopic, catalog.subList(item.slug).map { it.slug to it.name } + (NO_SUB to "কোনো sub-topic নয়"), onSub,
-                    if (sel != null) p.warn else if (flagged) p.warn else p.text3,
-                    if (sel != null || flagged) p.warn.copy(alpha = .14f) else p.elevated, icon = Icons.Filled.Sell,
-                )
-            }
-            if (hint != null && !hintTaken) SuggestionChip(
-                hint, nameOf = { catalog.catName(it) }, label = null,
-                subName = pairedSub?.let { catalog.subName(hint.slug, it.slug) }, subWeak = pairedSub != null && pairedSub.confidence < bulkMin,
-            ) { onApplyHint(hint.slug, pairedSub?.slug ?: "") }
-            if (item.slug.isNotEmpty() && subHint != null && item.subtopic != subHint.slug) SuggestionChip(
-                subHint, nameOf = { catalog.subName(item.slug, it) }, label = "Sub-topic", subName = null, subWeak = false,
-            ) { onSub(subHint.slug) }
-        }
-        if (flagged) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            Icon(Icons.Filled.ErrorOutline, null, Modifier.size(13.dp), tint = p.warn)
-            Text(if (item.slug.isNotEmpty()) "Sub-topic is required." else "Category is required.", style = MaterialTheme.typography.labelMedium, color = p.warn)
-        }
-
-        if (expanded) {
-            if (hasWarning) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (!n.hasKey) Chip("no correct answer → null", p.warn, p.warn.copy(alpha = .14f), icon = Icons.Filled.Warning)
-                if (n.gapWarning) Chip("empty option before a filled one", p.bad, p.bad.copy(alpha = .14f), icon = Icons.Filled.Warning)
-                if (n.answerOutOfRange) Chip("answer index out of range", p.bad, p.bad.copy(alpha = .14f), icon = Icons.Filled.Warning)
-            }
-            RichText(n.question, style = MaterialTheme.typography.bodyLarge)
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                n.options.forEachIndexed { i, o ->
-                    val correct = n.hasKey && i == n.answer - 1
-                    Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (correct) p.ok.copy(alpha = .12f) else p.elevated)
-                            .border(1.dp, if (correct) p.ok.copy(alpha = .5f) else p.outline, RoundedCornerShape(12.dp)).padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Box(Modifier.size(24.dp).clip(RoundedCornerShape(7.dp)).background(if (correct) p.ok else p.surface), contentAlignment = Alignment.Center) {
-                            Text(LivemcqAdmin.LETTERS.getOrElse(i) { "?" }.uppercase(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = if (correct) Color.White else p.text2)
-                        }
-                        RichText(o, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                        if (correct) Icon(Icons.Filled.Check, null, Modifier.size(14.dp), tint = p.ok)
+        RichText(n.question, style = MaterialTheme.typography.bodyLarge)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            n.options.forEachIndexed { i, o ->
+                val correct = n.hasKey && i == n.answer - 1
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(if (correct) p.ok.copy(alpha = .10f) else p.elevated)
+                        .padding(horizontal = 9.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp),
+                ) {
+                    Box(Modifier.size(20.dp).clip(CircleShape).background(if (correct) p.ok else p.outline), contentAlignment = Alignment.Center) {
+                        Text(LivemcqAdmin.LETTERS.getOrElse(i) { "?" }, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = if (correct) Color.White else p.text2)
                     }
+                    RichText(o, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    if (correct) Icon(Icons.Filled.Check, null, Modifier.size(13.dp), tint = p.ok)
                 }
             }
-            if (n.explanation.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("ব্যাখ্যা ${if (showExp) "▴" else "▾"}", Modifier.clickable { showExp = !showExp }, style = MaterialTheme.typography.labelLarge, color = p.primary, fontWeight = FontWeight.SemiBold)
-                if (showExp) RichText(n.explanation, style = MaterialTheme.typography.bodyMedium, color = p.text2)
-            }
-            if (item.slug.isNotEmpty() && subRequired) SubtopicPicker(
-                item.slug, catalog, item.subtopic, onSub, Modifier.fillMaxWidth(), m = m, required = true,
-                invalid = flagged && item.subtopic.isEmpty(), onAdded = { s -> onSubAdded(item.slug, s) },
-            )
-            if (hint != null) Text(
-                "closest stored question: “${stripTags(hint.nearestQuestion).take(90)}”" +
-                    (if (hint.nearestSource != "livemcq") " (from the ${hint.nearestSource} module)" else ""),
-                style = MaterialTheme.typography.labelSmall, color = p.text3, maxLines = 2, overflow = TextOverflow.Ellipsis,
-            )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                ModalButton("Insert this one", true, tint = p.primary, enabled = !busy, icon = Icons.Filled.Check, onClick = onInsertOne)
+        }
+        if (n.explanation.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("ব্যাখ্যা ${if (showExp) "▴" else "▾"}", Modifier.clickable { showExp = !showExp }, style = MaterialTheme.typography.labelLarge, color = p.primary, fontWeight = FontWeight.SemiBold)
+            if (showExp) RichText(n.explanation, style = MaterialTheme.typography.bodyMedium, color = p.text2)
+        }
+
+        // One box, both fields: the sub-topic guess is scored against the suggested category, so Apply settles both.
+        if (hint != null && !hintTaken) SuggestionBox(
+            hint, nameOf = { catalog.catName(it) }, label = null,
+            subName = pairedSub?.let { catalog.subName(hint.slug, it.slug) }, subWeak = pairedSub != null && pairedSub.confidence < bulkMin,
+        ) { onApplyHint(hint.slug, pairedSub?.slug ?: "") }
+
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StyledSelect(item.slug, catalog.topics, onSlug, Modifier.weight(1f), placeholder = "Select category…", invalid = flagged && item.slug.isEmpty())
+            Row(
+                Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(12.dp)).background(p.elevated).border(1.dp, p.outline, RoundedCornerShape(12.dp))
+                    .clickable(enabled = !busy, onClick = onInsertOne).padding(horizontal = 13.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(Icons.Filled.Check, null, Modifier.size(14.dp), tint = p.text2)
+                Text("Insert", style = MaterialTheme.typography.labelLarge, color = p.text2, fontWeight = FontWeight.SemiBold)
             }
         }
+        if (flagged) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            Icon(Icons.Filled.ErrorOutline, null, Modifier.size(13.dp), tint = p.bad)
+            Text(if (item.slug.isNotEmpty()) "Sub-topic is required." else "Category is required.", style = MaterialTheme.typography.labelMedium, color = p.bad)
+        }
+
+        if (item.slug.isNotEmpty() && subHint != null && item.subtopic != subHint.slug) SuggestionBox(
+            subHint, nameOf = { catalog.subName(item.slug, it) }, label = "Sub-topic", subName = null, subWeak = false,
+        ) { onSub(subHint.slug) }
+        if (item.slug.isNotEmpty()) SubtopicPicker(
+            item.slug, catalog, item.subtopic, onSub, Modifier.fillMaxWidth(), m = m, required = subRequired,
+            invalid = flagged && subRequired && item.subtopic.isEmpty(), onAdded = { s -> onSubAdded(item.slug, s) },
+        )
     }
 }
 
-/** A suggestion from the local tf-idf/kNN index — never auto-applied; one small chip, tap to apply. */
+/**
+ * A suggestion from the local tf-idf/kNN index, as the web's Suggestion box — never auto-applied; it names the stored
+ * question it matched so the guess can be judged rather than trusted, and says when it is weak.
+ */
 @Composable
-private fun SuggestionChip(
+private fun SuggestionBox(
     hint: LivemcqClassifier.Suggestion, nameOf: (String) -> String, label: String?, subName: String?, subWeak: Boolean, onApply: () -> Unit,
 ) {
     val p = LocalPalette.current
     val color = when (hint.tier) { "strong" -> p.ok; "likely" -> p.primary; else -> p.warn }
     val pct = Math.round(hint.confidence * 100).toInt()
-    Chip(
-        buildString {
-            if (label != null) append("$label · ")
-            append("${TIER_LABEL[hint.tier]} ${nameOf(hint.slug)}")
-            if (subName != null) append(" › $subName")
-            append(" · $pct%")
-            if (subName != null && subWeak) append(" ?")
-        },
-        color, color.copy(alpha = .14f), icon = Icons.Filled.AutoFixHigh, onClick = onApply,
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(color.copy(alpha = .07f))
+            .border(1.dp, color.copy(alpha = .35f), RoundedCornerShape(12.dp)).padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp),
+    ) {
+        Icon(if (label != null) Icons.Filled.Sell else Icons.Filled.AutoFixHigh, null, Modifier.size(14.dp), tint = color)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                buildAnnotatedString {
+                    if (label != null) withStyle(SpanStyle(color = p.text3, fontWeight = FontWeight.SemiBold)) { append("$label · ") }
+                    append("${TIER_LABEL[hint.tier]} ")
+                    withStyle(SpanStyle(color = p.text, fontWeight = FontWeight.Bold)) { append(nameOf(hint.slug)) }
+                    if (subName != null) {
+                        append(" › ")
+                        withStyle(SpanStyle(color = p.text, fontWeight = FontWeight.Bold)) { append(subName) }
+                    }
+                    withStyle(SpanStyle(color = p.text3)) { append(" · $pct%") }
+                },
+                style = MaterialTheme.typography.bodySmall, color = p.text2,
+            )
+            if (hint.tier == "weak" || (subName != null && subWeak)) Text(
+                if (hint.tier == "weak") "low confidence" else "sub-topic uncertain",
+                style = MaterialTheme.typography.labelSmall, color = p.warn, fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                "closest: “${stripTags(hint.nearestQuestion).take(90)}”" + (if (hint.nearestSource != "livemcq") " · ${hint.nearestSource}" else ""),
+                style = MaterialTheme.typography.labelSmall, color = p.text3, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Text(
+            "Apply", Modifier.clip(RoundedCornerShape(8.dp)).background(color).clickable(onClick = onApply).padding(horizontal = 12.dp, vertical = 7.dp),
+            style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+@Composable
+private fun LinkText(text: String, onClick: () -> Unit) {
+    val p = LocalPalette.current
+    Text(
+        text, Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onClick).padding(horizontal = 6.dp, vertical = 4.dp),
+        style = MaterialTheme.typography.labelLarge, color = p.primary, fontWeight = FontWeight.SemiBold, maxLines = 1,
     )
 }
 
 /**
- * The LiveMCQ source: favourites straight off livemcq.com (formerly Magpie's export module). "New" reads pages
- * newest-first and stops at the highest favorite_id already stored, so the database itself is the baseline.
+ * Where the questions come from. Idle: one compact LiveMCQ card (formerly Magpie's export module) with the JSON picker
+ * beside Fetch. Loaded: the source's name with Save copy (fetched only) and Change.
  */
 @Composable
-private fun LiveSourceCard(st: ImportState, onFetch: () -> Unit, onCheck: () -> Unit) {
+private fun SourceCard(
+    st: ImportState, onFetch: () -> Unit, onCheck: () -> Unit, onPick: () -> Unit, onSaveCopy: () -> Unit, onChange: () -> Unit,
+) {
     val p = LocalPalette.current
+    val shape = RoundedCornerShape(16.dp)
+    if (st.fileName.isNotEmpty() || st.items.isNotEmpty()) {
+        Row(
+            Modifier.fillMaxWidth().clip(shape).background(p.surface).border(1.dp, p.outline, shape).padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(if (st.fetched != null) Icons.Filled.CloudDownload else Icons.Filled.FileUpload, null, Modifier.size(18.dp), tint = p.primary)
+            Text(st.fileName.ifEmpty { "livefav" }, Modifier.weight(1f).padding(start = 4.dp), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (st.fetched != null && st.copySaved == null) LinkText("Save copy", onSaveCopy)
+            LinkText("Change", onChange)
+        }
+        return
+    }
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(p.surface).border(1.dp, p.outline, RoundedCornerShape(22.dp)).padding(16.dp),
+        Modifier.fillMaxWidth().clip(shape).background(p.surface).border(1.dp, p.outline, shape).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.size(44.dp).clip(CircleShape).background(p.primary.copy(alpha = .14f)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.CloudDownload, null, Modifier.size(22.dp), tint = p.primary)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(if (st.liveSignedIn) p.ok else p.text3))
+            Text("LiveMCQ", Modifier.padding(start = 8.dp).weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            if (st.liveSignedIn) {
+                LinkText(st.peek ?: "Check", onCheck)
+                Text("Sign out", Modifier.clip(RoundedCornerShape(6.dp)).clickable(enabled = !st.busy) { LivemcqFavorites.signOut { st.liveSignedIn = false } }.padding(horizontal = 6.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelLarge, color = p.text3, maxLines = 1)
             }
-            Column(Modifier.weight(1f)) {
-                Text("Fetch from LiveMCQ", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(
-                    if (st.liveSignedIn) "Signed in · your favourites, checked against the database" else "Sign in once; the session stays on this phone",
-                    style = MaterialTheme.typography.bodySmall, color = if (st.liveSignedIn) p.ok else p.text3,
+        }
+        if (st.liveSignedIn) Row(Modifier.fillMaxWidth().height(40.dp).clip(RoundedCornerShape(12.dp)).background(p.elevated).padding(3.dp)) {
+            Segment("New", st.newOnly, !st.busy, Modifier.weight(1f)) { st.newOnly = true }
+            Segment("Newest", !st.newOnly, !st.busy, Modifier.weight(1f)) { st.newOnly = false }
+            if (!st.newOnly) Box(Modifier.width(76.dp).fillMaxHeight().padding(start = 3.dp).clip(RoundedCornerShape(9.dp)).background(p.surface), contentAlignment = Alignment.Center) {
+                BasicTextField(
+                    st.count, { v -> st.count = v.filter { it.isDigit() }.take(4) }, Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                    enabled = !st.busy, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    textStyle = MaterialTheme.typography.labelLarge.copy(color = p.text, textAlign = androidx.compose.ui.text.style.TextAlign.Center),
+                    cursorBrush = SolidColor(p.primary),
                 )
             }
-            if (st.liveSignedIn) Text(
-                "Sign out", Modifier.clip(CircleShape).clickable(enabled = !st.busy) { LivemcqFavorites.signOut { st.liveSignedIn = false } }
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                style = MaterialTheme.typography.labelMedium, color = p.text3, fontWeight = FontWeight.SemiBold,
-            )
         }
-        if (!st.liveSignedIn) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                ModalButton("Sign in to LiveMCQ", true, tint = p.primary, icon = Icons.AutoMirrored.Filled.Login) { st.login = true }
-            }
-            return@Column
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ScopeOption("New since last import", "Above the newest stored", st.newOnly, !st.busy, Modifier.weight(1f)) { st.newOnly = true }
-            ScopeOption("Newest by count", "Stored or not", !st.newOnly, !st.busy, Modifier.weight(1f)) { st.newOnly = false }
-        }
-        if (!st.newOnly) OutlinedTextField(
-            value = st.count, onValueChange = { v -> st.count = v.filter { it.isDigit() }.take(4) },
-            label = { Text("How many") }, singleLine = true, enabled = !st.busy,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth(),
-        )
         st.progress?.let { pr ->
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 LinearProgressIndicator(
                     progress = { if (pr.pages > 0) pr.page.toFloat() / pr.pages else 0f }, Modifier.fillMaxWidth(),
                     color = p.primary, trackColor = p.primary.copy(alpha = .16f),
                 )
-                Text("Page ${pr.page} of ${pr.pages} · ${pr.questions} question${if (pr.questions == 1) "" else "s"}", style = MaterialTheme.typography.labelSmall, color = p.text3)
+                Text("Page ${pr.page}/${pr.pages} · ${pr.questions} new", style = MaterialTheme.typography.labelSmall, color = p.text3)
             }
         }
-        st.peek?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = p.text2) }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "Check account", Modifier.clip(CircleShape).clickable(enabled = !st.busy, onClick = onCheck).padding(horizontal = 8.dp, vertical = 6.dp),
-                style = MaterialTheme.typography.labelLarge, color = p.primary, fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.weight(1f))
-            ModalButton(if (st.busy) "Fetching…" else "Fetch favourites", true, tint = p.primary, enabled = !st.busy, busy = st.busy, icon = Icons.Filled.CloudDownload, onClick = onFetch)
+        Row(Modifier.fillMaxWidth().height(46.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SourceButton(
+                when { !st.liveSignedIn -> "Sign in"; st.busy -> "Fetching…"; else -> "Fetch" },
+                if (st.liveSignedIn) Icons.Filled.CloudDownload else Icons.AutoMirrored.Filled.Login, filled = true, enabled = !st.busy,
+                modifier = Modifier.weight(1f),
+            ) { if (st.liveSignedIn) onFetch() else st.login = true }
+            SourceButton("JSON", Icons.Filled.FileUpload, filled = false, enabled = !st.busy, modifier = Modifier.width(110.dp), onClick = onPick)
         }
     }
 }
 
 @Composable
-private fun ScopeOption(title: String, detail: String, selected: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun Segment(text: String, selected: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val p = LocalPalette.current
-    Column(
-        modifier.clip(RoundedCornerShape(14.dp)).background(if (selected) p.primary.copy(alpha = .10f) else p.elevated)
-            .border(if (selected) 2.dp else 1.dp, if (selected) p.primary else p.outline, RoundedCornerShape(14.dp))
-            .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+    Box(
+        modifier.fillMaxHeight().clip(RoundedCornerShape(9.dp)).background(if (selected) p.surface else Color.Transparent)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = if (selected) p.primary else p.text2)
-        Text(detail, style = MaterialTheme.typography.labelSmall, color = p.text3)
+        Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = if (selected) p.primary else p.text3)
+    }
+}
+
+@Composable
+private fun SourceButton(
+    text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, filled: Boolean, enabled: Boolean, modifier: Modifier,
+    tint: Color? = null, onClick: () -> Unit,
+) {
+    val p = LocalPalette.current
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        modifier.fillMaxHeight().clip(shape).background(if (filled) (tint ?: p.primary).copy(alpha = if (enabled) 1f else .5f) else p.surface)
+            .let { if (filled) it else it.border(1.dp, p.outline, shape) }.clickable(enabled = enabled, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
+    ) {
+        Icon(icon, null, Modifier.size(17.dp), tint = if (filled) Color.White else p.text2)
+        Text(text, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = if (filled) Color.White else p.text2)
     }
 }
