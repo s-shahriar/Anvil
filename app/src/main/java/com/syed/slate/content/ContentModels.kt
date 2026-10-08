@@ -8,7 +8,7 @@ import org.json.JSONObject
  *  - general: id-less question fields (question, options, correct_answer, explanation, extra, ...)
  *  - ict: the `payload` jsonb (written/extra/viva cards carry their whole answer there)
  */
-const val CACHE_VERSION = 2
+const val CACHE_VERSION = 3 // 3: rows carry updated_at, so answer/explanation-only edits are picked up by the delta
 
 class Item(
     val id: String,
@@ -17,6 +17,8 @@ class Item(
     val topic: String,
     val sort: Int,
     val data: JSONObject,
+    /** The row's `updated_at` (bumped by a trigger on every edit); how the delta sees edits that keep the uid. */
+    val updatedAt: String? = null,
 ) {
     val question: String get() = data.optString("question").ifEmpty { data.optString("q") }
 

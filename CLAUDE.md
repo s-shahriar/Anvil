@@ -172,7 +172,8 @@ into the WebView (blocks are already tagged `data-hl-block`).
 - Content refresh is now a **delta sync** (`ContentRepository.probe`/`delta`): a light `uid,sort_order`+placement
   probe (~300KB) is diffed against the cache and only changed/new rows are fetched (`uid=in.…` chunks of 200);
   removed uids are dropped; tiny metadata tables (General categories/subtopics/written_cards) are always
-  refetched. No `updated_at` columns exist — uids are cyrb53 content hashes, so any edit changes the uid. A
+  refetched. Since 0.6.1 (cache v3) `questions.updated_at` exists in both projects (trigger `questions_touch` bumps it on
+  every UPDATE); the probe compares it per row **id**, so answer / explanation / option edits that keep the uid are fetched too. A
   full re-download happens only when the cache is missing or its `version` is old. Opening a module NEVER probes the server
   (only a missing/outdated cache downloads); the Refresh button (module top bar / Settings) runs the delta check.
 - Math page: 13 of the owner's 15 saved `m…` marks match computed card ids; 2 (`m1y7v8pus1j3`, `mz4jpvp31v0`) match no current card

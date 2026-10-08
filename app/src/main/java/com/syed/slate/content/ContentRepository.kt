@@ -108,7 +108,8 @@ class ContentRepository(
             val fresh = if (cached == null || cached.version < CACHE_VERSION) download() else delta(cached)
             withContext(Dispatchers.IO) { writeCache(fresh) }
             full = fresh; publish()
-            val r = Refreshed(lastDelta ?: Delta(fresh.allItems().count(), 0, 0), firstDownload = cached == null, at = System.currentTimeMillis())
+            // A version upgrade re-downloads everything once; report it as a download, not as thousands of "new".
+            val r = Refreshed(lastDelta ?: Delta(fresh.allItems().count(), 0, 0), firstDownload = lastDelta == null, at = System.currentTimeMillis())
             refreshPrefs.edit().putInt("added", r.delta.added).putInt("updated", r.delta.updated).putInt("removed", r.delta.removed)
                 .putBoolean("first", r.firstDownload).putLong("at", r.at).apply()
             _lastRefresh.value = r
@@ -150,21 +151,16 @@ class ContentRepository(
         val wcards = db.selectAll("written_cards", "select=category_id,serial,icon,title,subtitle,body,tip,issues,benefits,sort_order&topic=eq.data&order=sort_order")
         val rows = db.selectAll(
             "questions",
-            "select=id,uid,type,question,options,correct_answer,correct_answer_text,explanation,extra,sort_order," +
-                "categories!inner(slug,module)&deleted_at=is.null&order=id",
+            "select=$GENERAL_COLS&deleted_at=is.null&order=id",
         ) { progress("Questions", it) }
-        val items = rows.map { r ->
-            val cat = r.getJSONObject("categories")
-            r.remove("categories")
-            Item(r.getString("id"), r.optString("uid").ifEmpty { null }, cat.getString("module"), cat.getString("slug"), r.optInt("sort_order"), r)
-        }
+        val items = rows.map(::toGeneralItem)
         return TopicCatalog.build(module, items, names, sort, subs, now, wcats, wcards)
     }
 
     private suspend fun downloadIct(now: Long): ModuleContent {
         val rows = db.selectAll(
             "questions",
-            "select=id,uid,module,category_slug,question,payload,sort_order&deleted_at=is.null" +
+            "select=$ICT_COLS&deleted_at=is.null" +
                 "&module=in.(mcq,written,extra,viva)&order=id",
         ) { progress("Questions", it) }
         val items = rows.map { r -> toIctItem(r) }
@@ -175,7 +171,14 @@ class ContentRepository(
         val data = r.optJSONObject("payload") ?: org.json.JSONObject()
         // MCQ payloads carry their own text; the column is the fallback for the others.
         if (!data.has("question") && !data.has("q")) data.put("question", r.optString("question"))
-        return Item(r.getString("id"), r.optString("uid").ifEmpty { null }, r.getString("module"), r.getString("category_slug"), r.optInt("sort_order"), data)
+        return Item(r.getString("id"), r.optString("uid").ifEmpty { null }, r.getString("module"), r.getString("category_slug"), r.optInt("sort_order"), data,
+            r.optString("updated_at").ifEmpty { null })
+    }
+
+    private fun toGeneralItem(r: org.json.JSONObject): Item {
+        val cat = r.getJSONObject("categories"); r.remove("categories")
+        val upd = r.optString("updated_at").ifEmpty { null }; r.remove("updated_at")
+        return Item(r.getString("id"), r.optString("uid").ifEmpty { null }, cat.getString("module"), cat.getString("slug"), r.optInt("sort_order"), r, upd)
     }
 
     // ── delta ────────────────────────────────────────────────────────────
@@ -183,18 +186,23 @@ class ContentRepository(
     /** One live row's identity and placement, all that is needed to tell changed from unchanged. */
     @Volatile private var lastDelta: Delta? = null
 
-    private class Probe(val id: String, val uid: String, val group: String, val topic: String, val sort: Int)
+    private companion object {
+        const val GENERAL_COLS = "id,uid,type,question,options,correct_answer,correct_answer_text,explanation,extra,sort_order,updated_at,categories!inner(slug,module)"
+        const val ICT_COLS = "id,uid,module,category_slug,question,payload,sort_order,updated_at"
+    }
+
+    private class Probe(val id: String, val uid: String, val group: String, val topic: String, val sort: Int, val updatedAt: String?)
 
     private suspend fun probe(): List<Probe> = when (module) {
         ModuleId.GENERAL -> db.selectAll(
-            "questions", "select=id,uid,sort_order,categories!inner(slug,module)&deleted_at=is.null&order=id",
+            "questions", "select=id,uid,sort_order,updated_at,categories!inner(slug,module)&deleted_at=is.null&order=id",
         ) { progress("Checking", it) }.map { r ->
             val c = r.getJSONObject("categories")
-            Probe(r.getString("id"), r.getString("uid"), c.getString("module"), c.getString("slug"), r.optInt("sort_order"))
+            Probe(r.getString("id"), r.getString("uid"), c.getString("module"), c.getString("slug"), r.optInt("sort_order"), r.optString("updated_at").ifEmpty { null })
         }
         ModuleId.ICT -> db.selectAll(
-            "questions", "select=id,uid,module,category_slug,sort_order&deleted_at=is.null&module=in.(mcq,written,extra,viva)&order=id",
-        ) { progress("Checking", it) }.map { r -> Probe(r.getString("id"), r.getString("uid"), r.getString("module"), r.getString("category_slug"), r.optInt("sort_order")) }
+            "questions", "select=id,uid,module,category_slug,sort_order,updated_at&deleted_at=is.null&module=in.(mcq,written,extra,viva)&order=id",
+        ) { progress("Checking", it) }.map { r -> Probe(r.getString("id"), r.getString("uid"), r.getString("module"), r.getString("category_slug"), r.optInt("sort_order"), r.optString("updated_at").ifEmpty { null }) }
     }
 
     /** Full rows for exactly these row ids, in PostgREST-friendly chunks. */
@@ -205,12 +213,11 @@ class ContentRepository(
             val rows = when (module) {
                 ModuleId.GENERAL -> db.selectAll(
                     "questions",
-                    "select=id,uid,type,question,options,correct_answer,correct_answer_text,explanation,extra,sort_order," +
-                        "categories!inner(slug,module)&deleted_at=is.null&$filter&order=id",
+                    "select=$GENERAL_COLS&deleted_at=is.null&$filter&order=id",
                 )
                 ModuleId.ICT -> db.selectAll(
                     "questions",
-                    "select=id,uid,module,category_slug,question,payload,sort_order&deleted_at=is.null&$filter&order=id",
+                    "select=$ICT_COLS&deleted_at=is.null&$filter&order=id",
                 )
             }
             out += rows
@@ -232,8 +239,12 @@ class ContentRepository(
         val liveIds = live.mapTo(HashSet()) { it.id }
         val oldById = cached.allItems().associateBy { it.id }
 
-        // A row counts as changed when it is new, its uid changed (= its content was edited), or it moved.
-        val changedIds = live.filter { pr -> val old = oldById[pr.id]; old == null || old.uid != pr.uid || old.group != pr.group || old.topic != pr.topic || old.sort != pr.sort }
+        // A row counts as changed when it is new, it was edited (updated_at moved: catches answer / explanation / option
+        // edits that keep the uid, which only hashes the question text), its uid changed, or it moved.
+        val changedIds = live.filter { pr ->
+            val old = oldById[pr.id]
+            old == null || old.updatedAt != pr.updatedAt || old.uid != pr.uid || old.group != pr.group || old.topic != pr.topic || old.sort != pr.sort
+        }
             .mapTo(LinkedHashSet()) { it.id }
         val removedIds = oldById.keys - liveIds
         lastDelta = Delta(added = live.count { it.id !in oldById }, updated = changedIds.count { it in oldById }, removed = removedIds.size)
@@ -243,12 +254,7 @@ class ContentRepository(
         } else {
             progress("Updating", 0)
             val fetched = fetchByIds(changedIds.toList())
-            val newItems = fetched.map { r ->
-                if (module == ModuleId.GENERAL) {
-                    val cat = r.getJSONObject("categories"); r.remove("categories")
-                    Item(r.getString("id"), r.optString("uid").ifEmpty { null }, cat.getString("module"), cat.getString("slug"), r.optInt("sort_order"), r)
-                } else toIctItem(r)
-            }
+            val newItems = fetched.map { r -> if (module == ModuleId.GENERAL) toGeneralItem(r) else toIctItem(r) }
             val kept = cached.allItems().filter { it.id in liveIds && it.id !in changedIds }
             (kept + newItems).toList()
         }
@@ -286,7 +292,7 @@ class ContentRepository(
             for (it in c.allItems()) {
                 w.write(
                     JSONObject().put("id", it.id).put("uid", it.uid ?: JSONObject.NULL).put("g", it.group)
-                        .put("t", it.topic).put("s", it.sort).put("d", it.data).toString(),
+                        .put("t", it.topic).put("s", it.sort).put("d", it.data).put("u", it.updatedAt ?: JSONObject.NULL).toString(),
                 )
                 w.newLine()
             }
@@ -305,7 +311,7 @@ class ContentRepository(
             r.forEachLine { line ->
                 if (line.isBlank()) return@forEachLine
                 val o = JSONObject(line)
-                items.add(Item(o.getString("id"), o.optString("uid").takeIf { !o.isNull("uid") && it.isNotEmpty() }, o.getString("g"), o.getString("t"), o.getInt("s"), o.getJSONObject("d")))
+                items.add(Item(o.getString("id"), o.optString("uid").takeIf { !o.isNull("uid") && it.isNotEmpty() }, o.getString("g"), o.getString("t"), o.getInt("s"), o.getJSONObject("d"), if (o.isNull("u")) null else o.optString("u").ifEmpty { null }))
             }
             fun list(key: String) = meta.optJSONArray(key)?.let { a -> List(a.length()) { a.getJSONObject(it) } }.orEmpty()
             return TopicCatalog.build(module, items, names, sort, subs, meta.getLong("syncedAt"), list("wcats"), list("wcards"), meta.optInt("v", 1))
