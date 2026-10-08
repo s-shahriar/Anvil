@@ -56,7 +56,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.rememberTextMeasurer
 import com.syed.slate.backend.ModuleId
@@ -164,27 +163,32 @@ fun FlagBar(flag: Flag, uid: String, progress: ProgressRepository, modifier: Mod
         if (onTopicEdit != null) add(Spec(Icons.AutoMirrored.Filled.Label, "Topic", false, primary, true) { onTopicEdit() })
         if (trash != null && itemId != null) add(Spec(Icons.Filled.Delete, "Delete", false, p.bad, true) { confirmTrash = true })
     }
-    val measurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    val baseStyle = MaterialTheme.typography.labelMedium
-    HandMirror {
-        // Always ONE line, full width and end-aligned (the cluster sits on the hand-toggle edge; the mirror flips it).
-        // The chips are measured and the largest size that fits is used: normal, then compact, then tighter, then
-        // Topic / Delete as icons only. A plain Row used to crush the last chip into a column of single letters.
-        BoxWithConstraints(modifier.fillMaxWidth()) {
-            val tier = remember(specs.map { it.label }, maxWidth, labels) {
-                if (!labels) ChipTier.all.first() else ChipTier.all.firstOrNull { t ->
-                    val gaps = t.gap * (specs.size - 1)
-                    val chips = specs.sumOf { sp ->
-                        val textW = if (t.iconOnlySecondary && sp.secondary) 0.dp
-                            else with(density) { measurer.measure(sp.label, baseStyle.copy(fontSize = t.font)).size.width.toDp() } + t.iconGap
-                        (t.padH * 2 + t.icon + textW + 2.dp /* border */).value.toDouble()
-                    }
-                    chips.dp + gaps <= maxWidth
-                } ?: ChipTier.all.last()
+    if (!labels) {
+        // Study / Written cards: a compact cluster of icon chips on the hand-toggle edge (the mirror flips it).
+        HandMirror {
+            Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+                specs.forEach { sp -> IconFlagChip(sp.icon, sp.label, sp.on, sp.color, sp.onClick) }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(tier.gap, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
-                specs.forEach { sp -> FlagChip(sp.icon, sp.label, sp.on, sp.color, labels && !(tier.iconOnlySecondary && sp.secondary), tier, sp.onClick) }
+        }
+    } else {
+        // Quiz: a full-width action bar, one equal slot per action with the icon above its label. It lines up with the
+        // answer cards, always fits on one line, and keeps its shape when Weak appears or disappears; the label size only
+        // steps down if a label would not fit its slot (six actions on a narrow phone).
+        val measurer = rememberTextMeasurer()
+        val density = LocalDensity.current
+        val base = MaterialTheme.typography.labelMedium
+        HandMirror {
+            BoxWithConstraints(modifier.fillMaxWidth()) {
+                val gap = 6.dp
+                val slot = (maxWidth - gap * (specs.size - 1)) / specs.size
+                val font = remember(specs.map { it.label }, slot) {
+                    listOf(12.sp, 11.sp, 10.sp).firstOrNull { f ->
+                        specs.all { sp -> with(density) { measurer.measure(sp.label, base.copy(fontSize = f)).size.width.toDp() } <= slot - 8.dp }
+                    } ?: 10.sp
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    specs.forEach { sp -> BarFlagChip(sp.icon, sp.label, sp.on, sp.color, font, Modifier.weight(1f), sp.onClick) }
+                }
             }
         }
     }
@@ -207,29 +211,31 @@ fun FlagBar(flag: Flag, uid: String, progress: ProgressRepository, modifier: Mod
     }
 }
 
-/** Chip sizes, largest first; [FlagBar] picks the first one whose row fits the width. */
-private class ChipTier(val padH: Dp, val padV: Dp, val icon: Dp, val iconGap: Dp, val gap: Dp, val font: TextUnit, val iconOnlySecondary: Boolean) {
-    companion object {
-        val all = listOf(
-            ChipTier(10.dp, 8.dp, 18.dp, 5.dp, 6.dp, 12.sp, false),
-            ChipTier(8.dp, 7.dp, 16.dp, 4.dp, 5.dp, 11.5.sp, false),
-            ChipTier(6.dp, 7.dp, 15.dp, 3.dp, 4.dp, 11.sp, false),
-            ChipTier(6.dp, 7.dp, 15.dp, 3.dp, 4.dp, 11.sp, true),
-        )
-    }
-}
-
 @Composable
-private fun FlagChip(icon: ImageVector, label: String, on: Boolean, color: Color, showLabel: Boolean, tier: ChipTier, onClick: () -> Unit) {
+private fun IconFlagChip(icon: ImageVector, label: String, on: Boolean, color: Color, onClick: () -> Unit) {
     val p = LocalPalette.current
-    Row(
+    Box(
         Modifier.clip(MaterialTheme.shapes.small).background(if (on) color.copy(alpha = .16f) else Color.Transparent)
             .border(BorderStroke(1.dp, if (on) color else p.outline), MaterialTheme.shapes.small)
-            .clickable(onClick = onClick).padding(horizontal = tier.padH, vertical = tier.padV),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(tier.iconGap),
+            .clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 8.dp),
+    ) { Icon(icon, label, Modifier.size(18.dp), tint = if (on) color else p.text3) }
+}
+
+/** One slot of the quiz action bar: icon over label, the whole slot tappable, filled when the flag is on. */
+@Composable
+private fun BarFlagChip(icon: ImageVector, label: String, on: Boolean, color: Color, font: TextUnit, modifier: Modifier, onClick: () -> Unit) {
+    val p = LocalPalette.current
+    Column(
+        modifier.clip(MaterialTheme.shapes.medium).background(if (on) color.copy(alpha = .16f) else p.surface)
+            .border(BorderStroke(1.dp, if (on) color else p.outline), MaterialTheme.shapes.medium)
+            .clickable(onClick = onClick).padding(horizontal = 4.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        Icon(icon, label, Modifier.size(tier.icon), tint = if (on) color else p.text3)
-        if (showLabel) Text(label, style = MaterialTheme.typography.labelMedium.copy(fontSize = tier.font), color = if (on) color else p.text2, maxLines = 1, softWrap = false)
+        Icon(icon, null, Modifier.size(20.dp), tint = if (on) color else p.text3)
+        Text(
+            label, style = MaterialTheme.typography.labelMedium.copy(fontSize = font), color = if (on) color else p.text2,
+            maxLines = 1, softWrap = false, textAlign = TextAlign.Center,
+        )
     }
 }
 

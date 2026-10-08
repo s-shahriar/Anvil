@@ -219,4 +219,5 @@ the partial file.
   `SyncNotifier` posts offline / back online / sync failed / "N changes saved" / refresh results ("12 new, 3 edited").
 - **Queues never lose edits**: all queue files are written with `File.writeAtomic`; `SlateApp` calls `flushNow()` on every module when the
   connection returns; `pull()` re-applies batches that landed during its fetch. Content delta is keyed by row `id` (uids are not unique in General).
-- **FlagBar** is always one line: `ChipTier` picks the largest chip size whose measured row fits; Topic/Delete go icon-only last.
+- **FlagBar** (quiz, labels on) is a full-width action bar: one equal slot per action, icon over label, aligned with the answer cards;
+  it keeps its shape when Weak appears; only the label size steps down (12→11→10sp) if a label would not fit its slot. Study/Written cards keep icon-only chips.
