@@ -38,7 +38,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material3.AlertDialog
-import androidx.compose.ui.platform.LocalContext
 import com.syed.slate.ui.screen.LivemcqAdmin
 import com.syed.slate.ui.screen.LivemcqClassifySheet
 import androidx.compose.runtime.remember
@@ -117,7 +116,6 @@ fun StudyScreen(vm: SlateViewModel, id: ModuleId, group: String, topic: String, 
     // Owner-only LiveMCQ per-card topic / sub-topic fix (the web's QuestionEditButton).
     var editItem by remember { mutableStateOf<com.syed.slate.content.Item?>(null) }
     var editBusy by remember { mutableStateOf(false) }
-    val toastCtx = LocalContext.current
     if (editItem != null) {
         val uid = editItem!!.uid
         var row by remember(editItem) { mutableStateOf<LivemcqAdmin.Row?>(null) }
@@ -125,7 +123,9 @@ fun StudyScreen(vm: SlateViewModel, id: ModuleId, group: String, topic: String, 
         LaunchedEffect(editItem) {
             try { row = uid?.let { LivemcqAdmin.fetchByUid(m.db, it) } } catch (e: Exception) { loadError = e.message }
         }
-        fun toast(s: String) = android.widget.Toast.makeText(toastCtx, s, android.widget.Toast.LENGTH_SHORT).show()
+        fun toast(s: String, ok: Boolean = true) = com.syed.slate.ui.component.Notices.post(
+            com.syed.slate.ui.component.Notice(s, if (ok) com.syed.slate.ui.component.Notice.Kind.OK else com.syed.slate.ui.component.Notice.Kind.ERROR),
+        )
         when {
             loadError != null -> AlertDialog(onDismissRequest = { editItem = null }, title = { Text("Couldn't load") }, text = { Text(loadError ?: "") }, confirmButton = { TextButton(onClick = { editItem = null }) { Text("OK") } })
             row != null -> LivemcqClassifySheet(
@@ -142,7 +142,7 @@ fun StudyScreen(vm: SlateViewModel, id: ModuleId, group: String, topic: String, 
                         editItem = null
                         toast("Saved")
                         if (slug != row!!.slug) m.content.refresh() // the question moved: the module's lists must follow
-                    } catch (e: Exception) { toast(e.message ?: "Failed") }
+                    } catch (e: Exception) { toast(e.message ?: "Failed", ok = false) }
                     editBusy = false
                 }
             }

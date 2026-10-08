@@ -13,10 +13,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -24,7 +20,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -34,21 +29,17 @@ import com.syed.slate.ui.theme.LocalPalette
 
 /**
  * Wraps a module's pages and offers Undo for flag edits. Every Nailed / Important / Weak / note change raises one
- * snackbar; a newer edit replaces it. The edit itself is already saved locally and queued — Undo just puts it back.
+ * notice (a newer edit replaces it). The edit itself is already saved locally and queued — Undo just puts it back.
+ * The notice is a [Notices] pill, which never blocks the buttons under it (a snackbar did).
  */
 @Composable
 fun UndoHost(progress: ProgressRepository, content: @Composable () -> Unit) {
-    Box(Modifier.fillMaxSize()) {
-        content()
-        val host = remember { SnackbarHostState() }
-        val change by progress.lastChange.collectAsState()
-        LaunchedEffect(change) {
-            val c = change ?: return@LaunchedEffect
-            val result = host.showSnackbar(c.label, actionLabel = "Undo", duration = SnackbarDuration.Short)
-            if (result == SnackbarResult.ActionPerformed) progress.undo(c)
-            progress.dismissChange()
-        }
-        SnackbarHost(host, Modifier.align(Alignment.BottomCenter))
+    content()
+    val change by progress.lastChange.collectAsState()
+    LaunchedEffect(change) {
+        val c = change ?: return@LaunchedEffect
+        Notices.post(Notice(c.label, actionLabel = "Undo", group = "undo", durationMs = 2_500) { progress.undo(c) })
+        progress.dismissChange()
     }
 }
 

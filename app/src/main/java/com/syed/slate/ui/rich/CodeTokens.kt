@@ -30,6 +30,15 @@ object CodeTokens {
 
     private val regexes = HashMap<String, Regex>()
 
+    /** A best guess for a listing that names no language (MCQ code): C unless it clearly reads as SQL, Java or C++. Mirrors ict-quiz's guessLang. */
+    fun guessLang(code: String): String = when {
+        !code.contains('{') && !code.contains('}') &&
+            Regex("""\b(select\s[\s\S]*\sfrom|insert\s+into|update\s+\w+\s+set|create\s+table|delete\s+from)\b""", RegexOption.IGNORE_CASE).containsMatchIn(code) -> "sql"
+        Regex("""\bSystem\.out\b|\bpublic\s+(static\s+)?(class|void)\b|\bString\[]""").containsMatchIn(code) -> "java"
+        Regex("""\bcout\b|\bcin\b|#include\s*<iostream>|\bstd::|\btemplate\s*<""").containsMatchIn(code) -> "cpp"
+        else -> "c"
+    }
+
     fun normalizeLang(lang: String?): String? = when ((lang ?: "c").lowercase()) {
         "c" -> "c"; "cpp", "c++" -> "cpp"; "java" -> "java"; "sql" -> "sql"; else -> null
     }

@@ -30,6 +30,7 @@ import com.syed.slate.ui.component.LocalOpenSyncQueue
 import com.syed.slate.ui.component.LocalToggleHand
 import com.syed.slate.ui.component.LocalToggleTheme
 import com.syed.slate.ui.component.SyncQueueSheet
+import com.syed.slate.ui.component.NoticeHost
 import com.syed.slate.ui.component.UndoHost
 import com.syed.slate.ui.highlight.HighlightHost
 import com.syed.slate.ui.component.LocalTrash
@@ -74,7 +75,12 @@ fun SlateNav(vm: SlateViewModel, dark: Boolean, activity: Activity) {
     fun Themed(scope: Scope, module: ModuleId? = null, content: @Composable () -> Unit) = SlateTheme(scope, dark) {
         // Inside a module, cards get a delete button wired to that module's recycle bin.
         CompositionLocalProvider(LocalTrash provides module?.let { vm.module(it).trash }) {
-            val page = @Composable { Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize(), content = content) }
+            // Every page carries the notice pills (undo, sync, connection): drawn over it, never blocking it.
+            val page = @Composable {
+                Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+                    Box { content(); NoticeHost() }
+                }
+            }
             if (module == null) {
                 page()
             } else {

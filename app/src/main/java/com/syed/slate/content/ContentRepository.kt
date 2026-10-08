@@ -21,6 +21,11 @@ sealed interface ContentState {
     class Ready(val content: ModuleContent) : ContentState
 }
 
+/** What the last refresh changed in `questions`: shown after a sync ("12 new"). A first download counts all as added. */
+data class Delta(val added: Int, val updated: Int, val removed: Int) {
+    val isEmpty get() = added == 0 && updated == 0 && removed == 0
+}
+
 sealed interface SyncState {
     data object Idle : SyncState
     class Running(val message: String) : SyncState
@@ -47,6 +52,17 @@ class ContentRepository(
     val state: StateFlow<ContentState> = _state
     private val _sync = MutableStateFlow<SyncState>(SyncState.Idle)
     val sync: StateFlow<SyncState> = _sync
+
+    /** The outcome of the last successful refresh: what it added, updated and removed. */
+    class Refreshed(val delta: Delta, val firstDownload: Boolean, val at: Long)
+    private val refreshPrefs = context.getSharedPreferences("refresh_${module.key}", Context.MODE_PRIVATE)
+    private val _lastRefresh = MutableStateFlow(
+        refreshPrefs.getLong("at", 0L).takeIf { it > 0 }?.let {
+            Refreshed(Delta(refreshPrefs.getInt("added", 0), refreshPrefs.getInt("updated", 0), refreshPrefs.getInt("removed", 0)), refreshPrefs.getBoolean("first", false), it)
+        },
+    )
+    /** The last successful refresh (kept across restarts); a new value means a refresh just finished. */
+    val lastRefresh: StateFlow<Refreshed?> = _lastRefresh
 
     /** The complete content; [state] shows it minus the questions in the recycle bin. */
     private var full: ModuleContent? = null
@@ -88,9 +104,14 @@ class ContentRepository(
         _sync.value = SyncState.Running("Checking for changes…")
         try {
             val cached = full
+            lastDelta = null
             val fresh = if (cached == null || cached.version < CACHE_VERSION) download() else delta(cached)
             withContext(Dispatchers.IO) { writeCache(fresh) }
             full = fresh; publish()
+            val r = Refreshed(lastDelta ?: Delta(fresh.allItems().count(), 0, 0), firstDownload = cached == null, at = System.currentTimeMillis())
+            refreshPrefs.edit().putInt("added", r.delta.added).putInt("updated", r.delta.updated).putInt("removed", r.delta.removed)
+                .putBoolean("first", r.firstDownload).putLong("at", r.at).apply()
+            _lastRefresh.value = r
             _sync.value = SyncState.Idle
             onRefreshed(fresh)
         } catch (e: Exception) {
@@ -160,25 +181,27 @@ class ContentRepository(
     // ── delta ────────────────────────────────────────────────────────────
 
     /** One live row's identity and placement, all that is needed to tell changed from unchanged. */
-    private class Probe(val uid: String, val group: String, val topic: String, val sort: Int)
+    @Volatile private var lastDelta: Delta? = null
+
+    private class Probe(val id: String, val uid: String, val group: String, val topic: String, val sort: Int)
 
     private suspend fun probe(): List<Probe> = when (module) {
         ModuleId.GENERAL -> db.selectAll(
-            "questions", "select=uid,sort_order,categories!inner(slug,module)&deleted_at=is.null&order=id",
+            "questions", "select=id,uid,sort_order,categories!inner(slug,module)&deleted_at=is.null&order=id",
         ) { progress("Checking", it) }.map { r ->
             val c = r.getJSONObject("categories")
-            Probe(r.getString("uid"), c.getString("module"), c.getString("slug"), r.optInt("sort_order"))
+            Probe(r.getString("id"), r.getString("uid"), c.getString("module"), c.getString("slug"), r.optInt("sort_order"))
         }
         ModuleId.ICT -> db.selectAll(
-            "questions", "select=uid,module,category_slug,sort_order&deleted_at=is.null&module=in.(mcq,written,extra,viva)&order=id",
-        ) { progress("Checking", it) }.map { r -> Probe(r.getString("uid"), r.getString("module"), r.getString("category_slug"), r.optInt("sort_order")) }
+            "questions", "select=id,uid,module,category_slug,sort_order&deleted_at=is.null&module=in.(mcq,written,extra,viva)&order=id",
+        ) { progress("Checking", it) }.map { r -> Probe(r.getString("id"), r.getString("uid"), r.getString("module"), r.getString("category_slug"), r.optInt("sort_order")) }
     }
 
-    /** Full rows for exactly these uids, in PostgREST-friendly chunks. */
-    private suspend fun fetchByUids(uids: List<String>): List<org.json.JSONObject> {
+    /** Full rows for exactly these row ids, in PostgREST-friendly chunks. */
+    private suspend fun fetchByIds(ids: List<String>): List<org.json.JSONObject> {
         val out = ArrayList<org.json.JSONObject>()
-        for (chunk in uids.chunked(200)) {
-            val filter = "uid=in.(${chunk.joinToString(",")})"
+        for (chunk in ids.chunked(150)) {
+            val filter = "id=in.(${chunk.joinToString(",")})"
             val rows = when (module) {
                 ModuleId.GENERAL -> db.selectAll(
                     "questions",
@@ -203,26 +226,30 @@ class ContentRepository(
     private suspend fun delta(cached: ModuleContent): ModuleContent {
         val now = System.currentTimeMillis()
         val live = probe()
-        val liveUids = live.map { it.uid }.toSet()
-        val oldByUid = cached.allItems().filter { it.uid != null }.associateBy { it.uid!! }
+        // Keyed by the row id, which is unique. A uid is a hash of the question text and is NOT unique (General has
+        // different questions sharing a stem, e.g. "কোনটি শুদ্ধ বানান?"), so diffing by uid could not see one of them
+        // being trashed and kept it in the offline copy for good.
+        val liveIds = live.mapTo(HashSet()) { it.id }
+        val oldById = cached.allItems().associateBy { it.id }
 
-        // A row counts as changed when its uid is new, or the same uid sits in a different topic or position.
-        val changedPlacement = live.filter { pr -> val old = oldByUid[pr.uid]; old == null || old.group != pr.group || old.topic != pr.topic || old.sort != pr.sort }
-        val changedUids = changedPlacement.map { it.uid }.toSet()
-        val removedUids = oldByUid.keys - liveUids
+        // A row counts as changed when it is new, its uid changed (= its content was edited), or it moved.
+        val changedIds = live.filter { pr -> val old = oldById[pr.id]; old == null || old.uid != pr.uid || old.group != pr.group || old.topic != pr.topic || old.sort != pr.sort }
+            .mapTo(LinkedHashSet()) { it.id }
+        val removedIds = oldById.keys - liveIds
+        lastDelta = Delta(added = live.count { it.id !in oldById }, updated = changedIds.count { it in oldById }, removed = removedIds.size)
 
-        val items = if (changedUids.isEmpty() && removedUids.isEmpty()) {
+        val items = if (changedIds.isEmpty() && removedIds.isEmpty()) {
             cached.allItems().toList() // nothing moved in `questions`; only the small metadata tables are refetched
         } else {
             progress("Updating", 0)
-            val fetched = fetchByUids(changedUids.toList())
+            val fetched = fetchByIds(changedIds.toList())
             val newItems = fetched.map { r ->
                 if (module == ModuleId.GENERAL) {
                     val cat = r.getJSONObject("categories"); r.remove("categories")
                     Item(r.getString("id"), r.optString("uid").ifEmpty { null }, cat.getString("module"), cat.getString("slug"), r.optInt("sort_order"), r)
                 } else toIctItem(r)
             }
-            val kept = cached.allItems().filter { it.uid == null || (it.uid !in removedUids && it.uid !in changedUids) }
+            val kept = cached.allItems().filter { it.id in liveIds && it.id !in changedIds }
             (kept + newItems).toList()
         }
 

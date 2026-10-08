@@ -18,6 +18,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -94,9 +95,11 @@ fun PlainQuestionText(text: String, modifier: Modifier = Modifier, style: TextSt
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         com.syed.slate.ui.highlight.HText(uid, "q", prompt, style = style)
         if (code.isNotEmpty()) {
-            val p = LocalPalette.current
-            Box(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(p.elevated).horizontalScroll(rememberScrollState()).padding(12.dp)) {
-                com.syed.slate.ui.highlight.HText(uid, "q.code", code, style = MaterialTheme.typography.bodyMedium.copy(fontFamily = com.syed.slate.ui.theme.Mono, fontSize = 13.sp, lineHeight = 19.sp), softWrap = false)
+            // Syntax-coloured like the Written code blocks; the colours ride under the highlight marks.
+            val colors = if (LocalPalette.current.bg.luminance() < .5f) com.syed.slate.ui.reader.darkCode else com.syed.slate.ui.reader.lightCode
+            val coloured = remember(code, colors) { com.syed.slate.ui.reader.codeAnnotated(code, CodeTokens.guessLang(code), colors) }
+            Box(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(colors.bg).horizontalScroll(rememberScrollState()).padding(12.dp)) {
+                com.syed.slate.ui.highlight.HText(uid, "q.code", code, base = coloured, color = colors.text, style = MaterialTheme.typography.bodyMedium.copy(fontFamily = com.syed.slate.ui.theme.Mono, fontSize = 13.sp, lineHeight = 19.sp), softWrap = false)
             }
         }
     }

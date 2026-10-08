@@ -108,7 +108,6 @@ import com.syed.slate.ui.SlateViewModel
 import com.syed.slate.ui.component.Dot
 import com.syed.slate.ui.component.Pager
 import com.syed.slate.ui.component.SyncStatusStrip
-import com.syed.slate.ui.component.formatDate
 import com.syed.slate.ui.rich.HtmlParser
 import com.syed.slate.ui.theme.LocalPalette
 import kotlinx.coroutines.Dispatchers
@@ -199,13 +198,14 @@ fun ModuleScreen(vm: SlateViewModel, id: ModuleId, nav: ModuleNav) {
 private fun OfflineBanner(state: ContentState, cachedAt: Long) {
     val p = LocalPalette.current
     Row(
-        Modifier.fillMaxWidth().background(p.warn.copy(alpha = .16f)).padding(horizontal = 20.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+        Modifier.fillMaxWidth().background(p.warn.copy(alpha = .16f)).padding(horizontal = 20.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Icon(Icons.Filled.WifiOff, null, tint = p.warn)
+        Icon(Icons.Filled.WifiOff, null, Modifier.size(16.dp), tint = p.warn)
+        // One line: the date of the offline copy is enough (the full timestamp is in Settings).
         Text(
-            if (state is ContentState.Ready) "Offline — using the copy downloaded ${formatDate(cachedAt)}" else "Offline",
-            style = MaterialTheme.typography.labelLarge,
+            if (state is ContentState.Ready) "Offline · saved copy from ${java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault()).format(java.util.Date(cachedAt))}" else "Offline",
+            style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
         )
     }
 }
@@ -436,10 +436,6 @@ private fun SubModuleLauncher(id: ModuleId, content: ModuleContent, onOpen: (Str
         listOf("mcq", "written", "extra", "viva").filter { groupKeys.contains(it) } + listOf(EQUATION, PRACTICE)
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(
-            if (id == ModuleId.GENERAL) "বাংলা, English ও সাধারণ জ্ঞান Practice" else "Master Information & Communication Technology",
-            style = MaterialTheme.typography.bodyMedium, color = p.text3,
-        )
         keys.chunked(2).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 row.forEach { key ->

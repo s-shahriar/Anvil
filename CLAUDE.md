@@ -207,3 +207,15 @@ rendered pages via the prerender tool. Slate's `equation.css`/`mathformulas.css`
 `UpdateService.download` fetches the `.sha256` before the APK, resumes a partial file and retries (4 attempts, 20 s read timeout),
 and the card shows Connecting… / speed / Verifying…; `downloadUpdate` ignores a second tap while a job is active and Cancel keeps
 the partial file.
+
+## Quiz decks, notices, sync safety (0.6.0, 2026-10-09)
+- **A running quiz/exam deck is never rebuilt.** `QuizDecks` caches it by a `rememberSaveable` seed; `QuizPool.build(…, seed)` orders by a
+  per-row-id hash, so even a rebuild after process death gives the same order. Deleting a question mid-run removes it from the deck
+  (total shrinks, a point scored on it is taken back) — never re-shuffle under the current index. Exact duplicate rows count once;
+  same-stem questions (shared uid, different options) all stay. Web has the same rules in `src/lib/quizDeck.js` (both apps, sessionStorage resume).
+- **Notices** (`ui/component/Notices.kt`): every transient message (undo, sync, refresh results) is a `Notices.post(...)` pill drawn by
+  `NoticeHost` on every page. It has no pointer handling, so it never blocks buttons — don't use Material snackbars or Android Toasts.
+  `SyncNotifier` posts offline / back online / sync failed / "N changes saved" / refresh results ("12 new, 3 edited").
+- **Queues never lose edits**: all queue files are written with `File.writeAtomic`; `SlateApp` calls `flushNow()` on every module when the
+  connection returns; `pull()` re-applies batches that landed during its fetch. Content delta is keyed by row `id` (uids are not unique in General).
+- **FlagBar** is always one line: `ChipTier` picks the largest chip size whose measured row fits; Topic/Delete go icon-only last.

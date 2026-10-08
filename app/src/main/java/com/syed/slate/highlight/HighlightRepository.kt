@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import com.syed.slate.core.writeAtomic
 import java.io.File
 import java.util.UUID
 
@@ -118,7 +119,7 @@ class HighlightRepository(
     }
 
     private fun persist() {
-        file.writeText(JSONObject()
+        file.writeAtomic(JSONObject()
             .put("items", JSONArray(items.values.map { it.toJson() }))
             .put("adds", JSONArray(addIds.toList()))
             .put("deletedItems", JSONArray(deleted.values.map { it.toJson() }))
@@ -240,12 +241,21 @@ class HighlightRepository(
     }
 
     /** Replaces local state with the server's, then re-applies what has not been sent yet. */
+    /** Adds / deletes that reached the server, numbered, so a [pull] that overlapped them keeps them. */
+    private var flushGen = 0L
+    private val landedAdds = ArrayDeque<Pair<Long, List<Highlight>>>()
+    private val landedDels = ArrayDeque<Pair<Long, List<String>>>()
+
     suspend fun pull() {
         if (auth.session.value == null) return
+        val startGen = synchronized(lock) { flushGen }
         val rows = db.selectAll("user_highlights", "select=id,uid,block,start_off,end_off,quote,color&order=id")
         synchronized(lock) {
             val server = LinkedHashMap<String, Highlight>()
             for (r in rows) server[r.getString("id")] = Highlight(r.getString("id"), r.getString("uid"), r.getString("block"), r.getInt("start_off"), r.getInt("end_off"), r.getString("quote"), r.optString("color", DEFAULT_HIGHLIGHT_COLOR))
+            // Sent while the rows were being read: they may be missing from (or still in) them, and are no longer queued.
+            landedAdds.filter { it.first > startGen }.forEach { (_, hs) -> hs.forEach { h -> if (h.id !in server) items[h.id]?.let { server[h.id] = it } } }
+            landedDels.filter { it.first > startGen }.forEach { (_, ids) -> ids.forEach { server.remove(it) } }
             deleted.keys.forEach { server.remove(it) }; legacyDeletes.forEach { server.remove(it) }
             edits.forEach { (id, c) -> server[id]?.let { server[id] = it.copy(color = c) } }
             addIds.forEach { id -> items[id]?.let { server[id] = it } }
@@ -253,6 +263,9 @@ class HighlightRepository(
             persist()
         }
     }
+
+    /** Clears any backoff wait and flushes immediately (connection back, or the drawer's "Retry now"). */
+    fun retryNow() { job?.cancel(); job = null; kick() }
 
     fun kick() {
         if (job?.isActive == true) return
@@ -271,12 +284,12 @@ class HighlightRepository(
                             JSONObject().put("id", it.id).put("user_id", session.userId).put("uid", it.uid).put("block", it.block)
                                 .put("start_off", it.start).put("end_off", it.end).put("quote", it.quote).put("color", it.color)
                         }), "id")
-                        val receipts = synchronized(lock) { adds.map { h -> HlOp(items[h.id] ?: h, HlKind.ADD, null, stamps[h.id] ?: 0) }.also { adds.forEach { addIds.remove(it.id); stamps.remove(it.id) }; persist() } }
+                        val receipts = synchronized(lock) { adds.map { h -> HlOp(items[h.id] ?: h, HlKind.ADD, null, stamps[h.id] ?: 0) }.also { adds.forEach { addIds.remove(it.id); stamps.remove(it.id) }; persist(); landedAdds.addLast(++flushGen to adds); while (landedAdds.size > 20) landedAdds.removeFirst() } }
                         receipt(receipts)
                     }
                     if (dels.isNotEmpty()) {
                         db.delete("user_highlights", "id=in.(${dels.joinToString(",")})")
-                        val receipts = synchronized(lock) { dels.mapNotNull { id -> deleted[id]?.let { HlOp(it, HlKind.REMOVE, null, stamps[id] ?: 0) } }.also { deleted.keys.removeAll(dels.toSet()); legacyDeletes.removeAll(dels.toSet()); dels.forEach { stamps.remove(it) }; persist() } }
+                        val receipts = synchronized(lock) { dels.mapNotNull { id -> deleted[id]?.let { HlOp(it, HlKind.REMOVE, null, stamps[id] ?: 0) } }.also { deleted.keys.removeAll(dels.toSet()); legacyDeletes.removeAll(dels.toSet()); dels.forEach { stamps.remove(it) }; persist(); landedDels.addLast(++flushGen to dels); while (landedDels.size > 20) landedDels.removeFirst() } }
                         receipt(receipts)
                     }
                     eds.entries.groupBy({ it.value }, { it.key }).forEach { (color, ids) ->

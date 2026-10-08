@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import com.syed.slate.core.writeAtomic
 import java.io.File
 
 /**
@@ -167,9 +168,14 @@ class ProgressRepository(
         else -> "নোট সেভ হলো"
     }
 
+    /** Batches that reached the server, numbered, so a [pull] that overlapped them can put them back. */
+    private var flushGen = 0L
+    private val landed = ArrayDeque<Pair<Long, Map<String, Map<String, Any?>>>>()
+
     /** Replaces local state with the server's, then re-applies edits that have not been sent yet. */
     suspend fun pull() {
         if (auth.session.value == null) return
+        val startGen = synchronized(io) { flushGen }
         val rows = db.selectAll("user_progress", "select=uid,nailed,important,weak,note&order=uid")
         synchronized(io) {
             val server = HashMap<String, Flag>()
@@ -180,7 +186,10 @@ class ProgressRepository(
                 )
                 if (!f.isBlank) server[r.getString("uid")] = f
             }
-            for ((uid, patch) in pending.snapshot()) {
+            // A batch that landed while the rows were being read may be missing from them, and it is no longer
+            // pending either: without this the edit would vanish from the phone until the next pull.
+            val overlapped = landed.filter { it.first > startGen }.map { it.second } + pending.snapshot()
+            for ((uid, patch) in overlapped.flatMap { it.entries }.map { it.key to it.value }) {
                 val merged = FlagRules.apply(server[uid] ?: Flag(), patch)
                 if (merged.isBlank) server.remove(uid) else server[uid] = merged
             }
@@ -207,7 +216,10 @@ class ProgressRepository(
                 if (failure == null) {
                     val syncedAt = System.currentTimeMillis()
                     val stamps = synchronized(io) { batch.keys.associateWith { ts.optLong(it, syncedAt) } }
-                    synchronized(io) { pending.remove(batch); persist() }
+                    synchronized(io) {
+                        pending.remove(batch); persist()
+                        landed.addLast(++flushGen to batch); while (landed.size > 20) landed.removeFirst()
+                    }
                     _done.value = (batch.map { (u, pt) -> DoneChange(u, pt, stamps[u] ?: syncedAt, syncedAt) } + _done.value).take(60)
                     _savedAt.value = syncedAt; _savedCount.value = batch.size
                     _lastError.value = null; _attempts.value = 0
@@ -231,17 +243,17 @@ class ProgressRepository(
     }
 
     private fun persist() {
-        flagFile.writeText(JSONObject().also { o ->
+        flagFile.writeAtomic(JSONObject().also { o ->
             _flags.value.forEach { (uid, f) ->
                 o.put(uid, JSONObject().put("n", f.nailed).put("i", f.important).put("w", f.weak).put("t", f.note ?: JSONObject.NULL))
             }
         }.toString())
         val snap = pending.snapshot()
-        pendingFile.writeText(PendingQueue.toJson(snap).toString())
+        pendingFile.writeAtomic(PendingQueue.toJson(snap).toString())
         // Timestamps only for entries still queued; sent ones are pruned.
         val tsOut = JSONObject()
         snap.keys.forEach { uid -> if (ts.has(uid)) tsOut.put(uid, ts.getLong(uid)) }
-        tsFile.writeText(tsOut.toString())
+        tsFile.writeAtomic(tsOut.toString())
         _unsynced.value = snap.size
         refreshQueue()
     }

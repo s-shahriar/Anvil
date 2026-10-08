@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import com.syed.slate.core.writeAtomic
 import java.io.File
 
 /** One entry of the recycle bin. */
@@ -66,8 +67,8 @@ class TrashRepository(
     private fun computeHidden(): Set<String> = confirmed + queue.pendingTrash()
 
     private fun persist() {
-        queueFile.writeText(TrashQueue.toJson(queue.snapshot()).toString())
-        hiddenFile.writeText(JSONArray(confirmed.toList()).toString())
+        queueFile.writeAtomic(TrashQueue.toJson(queue.snapshot()).toString())
+        hiddenFile.writeAtomic(JSONArray(confirmed.toList()).toString())
         _hidden.value = computeHidden()
         _queueFlow.value = queue.snapshot()
     }

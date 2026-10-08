@@ -69,30 +69,31 @@ private fun JSONObject.str(key: String): String? = if (isNull(key)) null else op
 private fun JSONArray.strings(): List<String> = List(length()) { optString(it) }
 
 /** Code colours from ict-quiz, light and dark. The palette's own background tells which is in use. */
-private class CodeColors(val bg: androidx.compose.ui.graphics.Color, val text: androidx.compose.ui.graphics.Color, val kw: androidx.compose.ui.graphics.Color,
+internal class CodeColors(val bg: androidx.compose.ui.graphics.Color, val text: androidx.compose.ui.graphics.Color, val kw: androidx.compose.ui.graphics.Color,
                          val str: androidx.compose.ui.graphics.Color, val num: androidx.compose.ui.graphics.Color, val comment: androidx.compose.ui.graphics.Color,
                          val fn: androidx.compose.ui.graphics.Color, val type: androidx.compose.ui.graphics.Color)
 
 private fun c(hex: Long) = androidx.compose.ui.graphics.Color(0xFF000000 or hex)
-private val lightCode = CodeColors(c(0xE6EDF1), c(0x132029), c(0x22597A), c(0x2F7A56), c(0xA86E1F), c(0x7B8C98), c(0x6B4FA0), c(0x2E7599))
-private val darkCode = CodeColors(c(0x0D1419), c(0xEEF3F6), c(0x86C1DC), c(0x8FCBA8), c(0xE3B566), c(0x6B7C88), c(0xB9A3E0), c(0x6FB3D2))
+internal val lightCode = CodeColors(c(0xE6EDF1), c(0x132029), c(0x22597A), c(0x2F7A56), c(0xA86E1F), c(0x7B8C98), c(0x6B4FA0), c(0x2E7599))
+internal val darkCode = CodeColors(c(0x0D1419), c(0xEEF3F6), c(0x86C1DC), c(0x8FCBA8), c(0xE3B566), c(0x6B7C88), c(0xB9A3E0), c(0x6FB3D2))
+
+/** [code] with its syntax colours, for a [Text] or as the `base` of a highlightable [HText]. */
+internal fun codeAnnotated(code: String, lang: String?, colors: CodeColors): androidx.compose.ui.text.AnnotatedString = buildAnnotatedString {
+    append(code)
+    for (t in CodeTokens.tokenize(code, lang)) {
+        val col = when (t.kind) {
+            TokenKind.KEYWORD, TokenKind.META -> colors.kw; TokenKind.TYPE -> colors.type; TokenKind.STRING -> colors.str
+            TokenKind.NUMBER -> colors.num; TokenKind.COMMENT -> colors.comment; TokenKind.FUNCTION -> colors.fn
+        }
+        addStyle(SpanStyle(color = col), t.start, t.end)
+    }
+}
 
 @Composable
 fun CodeBlock(code: String, lang: String?, modifier: Modifier = Modifier) {
     val dark = LocalPalette.current.bg.luminance() < .5f
     val colors = if (dark) darkCode else lightCode
-    val text = remember(code, lang, dark) {
-        buildAnnotatedString {
-            append(code.trimEnd())
-            for (t in CodeTokens.tokenize(code.trimEnd(), lang)) {
-                val col = when (t.kind) {
-                    TokenKind.KEYWORD, TokenKind.META -> colors.kw; TokenKind.TYPE -> colors.type; TokenKind.STRING -> colors.str
-                    TokenKind.NUMBER -> colors.num; TokenKind.COMMENT -> colors.comment; TokenKind.FUNCTION -> colors.fn
-                }
-                addStyle(SpanStyle(color = col), t.start, t.end)
-            }
-        }
-    }
+    val text = remember(code, lang, dark) { codeAnnotated(code.trimEnd(), lang, colors) }
     Box(modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(colors.bg).horizontalScroll(rememberScrollState()).padding(12.dp)) {
         Text(text, color = colors.text, style = MaterialTheme.typography.bodyMedium.copy(fontFamily = Mono, fontSize = 12.5.sp, lineHeight = 18.sp), softWrap = false)
     }

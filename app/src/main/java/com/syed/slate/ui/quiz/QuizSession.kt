@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.syed.slate.ModuleServices
 import com.syed.slate.backend.ModuleId
 import com.syed.slate.content.Item
+import com.syed.slate.content.QuizPool
 import com.syed.slate.content.correctAnswer
 import com.syed.slate.content.explanation
 import com.syed.slate.content.optionList
@@ -75,7 +76,12 @@ fun QuizSession(
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     var done by rememberSaveable { mutableStateOf(false) }
     var attempt by rememberSaveable { mutableIntStateOf(0) } // bumps on retry so the list is reshuffled
-    val deck = remember(questions, attempt) { if (attempt == 0) questions else questions.shuffled() }
+    // A retry reshuffles from a saved seed, so recreating the screen mid-retry gives back the same order.
+    val retrySeed = rememberSaveable { kotlin.random.Random.nextLong() }
+    val ordered = remember(questions, attempt) { if (attempt == 0) questions else QuizPool.order(questions, retrySeed + attempt) }
+    // Questions deleted during this run (row ids). They leave the deck for good, so the total shrinks with them.
+    var removed by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    val deck = remember(ordered, removed) { if (removed.isEmpty()) ordered else removed.toHashSet().let { r -> ordered.filter { it.id !in r } } }
     val revealed = selected != null
 
     Column(Modifier.fillMaxSize()) {
@@ -141,7 +147,14 @@ fun QuizSession(
                 }
             }
             if (revealed) {
-                if (uid != null) FlagBar(flags[uid] ?: Flag(), uid, services.progress, labels = true, itemId = q.id, onDeleted = { if (idx + 1 >= deck.size) done = true else { idx++; selected = null } })
+                if (uid != null) FlagBar(flags[uid] ?: Flag(), uid, services.progress, labels = true, itemId = q.id, onDeleted = {
+                    // Deleting mid-run takes the question out: a point already scored on it is taken back, and the
+                    // next question slides into this position. Nothing is skipped and the result counts only what is left.
+                    if (selected == q.correctAnswer) score--
+                    removed = removed + q.id
+                    selected = null
+                    if (idx >= deck.size - 1) { idx = deck.size - 1; done = true } // it was the last one: show the result
+                })
                 q.explanation?.let { ExplanationBox(module, it, selected == correct, uid = uid) }
                 Button(
                     onClick = { if (idx + 1 >= deck.size) done = true else { idx++; selected = null } },

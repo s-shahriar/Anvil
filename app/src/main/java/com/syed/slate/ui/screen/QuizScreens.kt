@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import com.syed.slate.backend.ModuleId
 import com.syed.slate.content.ContentState
 import com.syed.slate.content.PoolSet
+import com.syed.slate.content.QuizDecks
 import com.syed.slate.content.QuizPool
 import com.syed.slate.content.TopicCatalog
 import com.syed.slate.ui.SlateViewModel
@@ -59,8 +60,10 @@ fun QuizScreen(vm: SlateViewModel, id: ModuleId, group: String, topic: String, s
     val state by m.content.state.collectAsState()
     val content = (state as? ContentState.Ready)?.content ?: return
     val name = content.groups.firstOrNull { it.key == group }?.topics?.firstOrNull { it.slug == topic }?.name ?: TopicCatalog.prettify(topic)
-    // Built once per quiz: flags changed during the quiz must not reshuffle or shorten it.
-    val pool = remember(content, group, topic, set) { QuizPool.build(content.items(group, topic), m.progress.flags.value, set) }
+    // Built once per quiz and then fixed: deleting a question, a refresh or a flag change must not reshuffle or
+    // shorten it. The seed survives recreation, so even a rebuild after process death gives the same order.
+    val seed = rememberSaveable(group, topic, set) { kotlin.random.Random.nextLong() }
+    val pool = remember(seed) { QuizDecks.get(seed) { QuizPool.build(content.items(group, topic), m.progress.flags.value, set, seed) } }
     Box(Modifier.fillMaxSize().safeDrawingPadding()) {
         QuizSession(
             services = m, questions = pool, topicName = { null }, pill = name,

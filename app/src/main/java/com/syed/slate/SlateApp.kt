@@ -36,6 +36,9 @@ class ModuleServices(app: Application, val id: ModuleId, private val scope: Coro
     val highlights = com.syed.slate.highlight.HighlightRepository(app, id, auth, db, scope)
 
     init { content.bindHidden(scope, trash.hidden) }
+
+    /** Pushes every queue now, skipping any backoff wait: flags, recycle-bin ops and highlights. */
+    fun flushNow() { progress.retryNow(); trash.retryNow(); highlights.retryNow() }
 }
 
 class SlateApp : Application() {
@@ -61,6 +64,13 @@ class SlateApp : Application() {
         updates = UpdateService(this)
         images = ImageStore(this)
         ModuleId.entries.forEach { modules[it] = ModuleServices(this, it, appScope, images) }
+        // The moment the connection comes back, everything queued while offline (or stuck in a retry wait of up to
+        // five minutes) is sent, instead of waiting for the next backoff tick.
+        appScope.launch {
+            var was = connectivity.online.value
+            connectivity.online.collect { now -> if (now && !was) modules.values.forEach { it.flushNow() }; was = now }
+        }
+        SyncNotifier(connectivity, ModuleId.entries.map { modules.getValue(it) }).start(appScope)
     }
 
     fun module(id: ModuleId): ModuleServices = modules.getValue(id)

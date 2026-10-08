@@ -66,4 +66,51 @@ class QuizTest {
         assertTrue(SearchText.matches(SearchText.normalize("Pellucid এর অর্থ কি?"), SearchText.tokens("PELLUCID")))
         assertFalse(SearchText.matches("anything", SearchText.tokens("  ")))
     }
+
+    // ── Deck guarantees: every question exactly once, and a rebuild never reshuffles under you ──
+
+    private fun row(id: String, uid: String, opts: String) = Item(
+        id, uid, "bangla", "banan", 0,
+        JSONObject().put("question", "কোনটি শুদ্ধ বানান?").put("options", JSONObject().put("a", opts).put("b", "x")).put("correct_answer", "a"),
+    )
+
+    @Test fun deckHoldsEveryQuestionExactlyOnce() {
+        val items = (1..500).map { item("u$it") }
+        val deck = QuizPool.build(items, emptyMap(), PoolSet.ALL, seed = 42)
+        assertEquals(500, deck.size)
+        assertEquals(items.map { it.id }.toSet(), deck.map { it.id }.toSet())
+    }
+
+    @Test fun sameSeedGivesSameOrderAndOtherSeedsShuffle() {
+        val items = (1..200).map { item("u$it") }
+        val a = QuizPool.build(items, emptyMap(), PoolSet.ALL, seed = 7).map { it.id }
+        assertEquals(a, QuizPool.build(items.reversed(), emptyMap(), PoolSet.ALL, seed = 7).map { it.id })
+        assertFalse(a == QuizPool.build(items, emptyMap(), PoolSet.ALL, seed = 8).map { it.id })
+        assertFalse(a == items.map { it.id }) // actually shuffled
+    }
+
+    @Test fun deletingAQuestionKeepsTheRestInPlace() {
+        val items = (1..100).map { item("u$it") }
+        val before = QuizPool.build(items, emptyMap(), PoolSet.ALL, seed = 3).map { it.id }
+        val gone = before[10]
+        val after = QuizPool.build(items.filter { it.id != gone }, emptyMap(), PoolSet.ALL, seed = 3).map { it.id }
+        assertEquals(before - gone, after)
+    }
+
+    @Test fun exactCopiesCountOnceButSameStemQuestionsAllStay() {
+        // Same uid (stem hash) with different options = different questions; same uid AND options = a duplicate row.
+        val items = listOf(row("1", "qX", "বানান ক"), row("2", "qX", "বানান খ"), row("3", "qX", "বানান ক"))
+        val deck = QuizPool.build(items, emptyMap(), PoolSet.ALL, seed = 1)
+        assertEquals(2, deck.size)
+        assertEquals(setOf("বানান ক", "বানান খ"), deck.map { it.data.getJSONObject("options").getString("a") }.toSet())
+        assertEquals(2, QuizPool.counts(items, emptyMap()).getValue(PoolSet.ALL))
+    }
+
+    @Test fun runningDeckIsNotRebuilt() {
+        val items = (1..20).map { item("u$it") }
+        val first = com.syed.slate.content.QuizDecks.get(99L) { QuizPool.build(items, emptyMap(), PoolSet.ALL, 99L) }
+        // Content changed (one deleted): the running deck must come back unchanged.
+        val again = com.syed.slate.content.QuizDecks.get(99L) { QuizPool.build(items.drop(1), emptyMap(), PoolSet.ALL, 99L) }
+        assertTrue(first === again)
+    }
 }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -53,6 +54,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.rememberTextMeasurer
 import com.syed.slate.backend.ModuleId
 import com.syed.slate.content.Grade
 import com.syed.slate.content.Item
@@ -143,21 +149,45 @@ fun FlagBar(flag: Flag, uid: String, progress: ProgressRepository, modifier: Mod
     var editorOpen by remember { mutableStateOf(false) }
     var confirmTrash by remember { mutableStateOf(false) }
     val trash = LocalTrash.current
-    HandMirror {
-        // Full width and end-aligned: the cluster sits on the same edge as the hand toggle (right-hand: right,
-        // left-hand: the mirror puts End on the left).
-        Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
-        FlagChip(Icons.Filled.Star, if (flag.nailed) "Nailed!" else "Nail It", flag.nailed, p.ok, labels) { progress.update(uid, FlagRules::toggleNailed) }
-        FlagChip(Icons.Filled.Bookmark, if (flag.important) "Saved!" else "Important", flag.important, p.imp, labels) { progress.update(uid, FlagRules::toggleImportant) }
+    // The chips this question shows, in order. "secondary" ones (Topic, Delete) can drop their label first.
+    class Spec(val icon: ImageVector, val label: String, val on: Boolean, val color: Color, val secondary: Boolean, val onClick: () -> Unit)
+    val primary = MaterialTheme.colorScheme.primary
+    val specs = buildList {
+        add(Spec(Icons.Filled.Star, if (flag.nailed) "Nailed!" else "Nail It", flag.nailed, p.ok, false) { progress.update(uid, FlagRules::toggleNailed) })
+        add(Spec(Icons.Filled.Bookmark, if (flag.important) "Saved!" else "Important", flag.important, p.imp, false) { progress.update(uid, FlagRules::toggleImportant) })
         if (flag.important && !flag.nailed) {
-            FlagChip(Icons.Filled.LocalFireDepartment, if (flag.weak) "Weak!" else "Weak", flag.weak, p.warn, labels) { progress.update(uid, FlagRules::toggleWeak) }
+            add(Spec(Icons.Filled.LocalFireDepartment, if (flag.weak) "Weak!" else "Weak", flag.weak, p.warn, false) { progress.update(uid, FlagRules::toggleWeak) })
         }
         // Hidden by default: a note is read through the chip (peek sheet), or written straight away when there is none yet.
-        FlagChip(Icons.Filled.EditNote, "Note", flag.note != null, MaterialTheme.colorScheme.primary, labels) { if (flag.note != null) peekOpen = true else editorOpen = true }
+        add(Spec(Icons.Filled.EditNote, "Note", flag.note != null, primary, false) { if (flag.note != null) peekOpen = true else editorOpen = true })
         // The web's owner-only QuestionEditButton (LiveMCQ): move the question to another topic / sub-topic.
-        if (onTopicEdit != null) FlagChip(Icons.AutoMirrored.Filled.Label, "Topic", false, MaterialTheme.colorScheme.primary, labels) { onTopicEdit() }
-        if (trash != null && itemId != null) FlagChip(Icons.Filled.Delete, "Delete", false, p.bad, labels) { confirmTrash = true }
-    } }
+        if (onTopicEdit != null) add(Spec(Icons.AutoMirrored.Filled.Label, "Topic", false, primary, true) { onTopicEdit() })
+        if (trash != null && itemId != null) add(Spec(Icons.Filled.Delete, "Delete", false, p.bad, true) { confirmTrash = true })
+    }
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val baseStyle = MaterialTheme.typography.labelMedium
+    HandMirror {
+        // Always ONE line, full width and end-aligned (the cluster sits on the hand-toggle edge; the mirror flips it).
+        // The chips are measured and the largest size that fits is used: normal, then compact, then tighter, then
+        // Topic / Delete as icons only. A plain Row used to crush the last chip into a column of single letters.
+        BoxWithConstraints(modifier.fillMaxWidth()) {
+            val tier = remember(specs.map { it.label }, maxWidth, labels) {
+                if (!labels) ChipTier.all.first() else ChipTier.all.firstOrNull { t ->
+                    val gaps = t.gap * (specs.size - 1)
+                    val chips = specs.sumOf { sp ->
+                        val textW = if (t.iconOnlySecondary && sp.secondary) 0.dp
+                            else with(density) { measurer.measure(sp.label, baseStyle.copy(fontSize = t.font)).size.width.toDp() } + t.iconGap
+                        (t.padH * 2 + t.icon + textW + 2.dp /* border */).value.toDouble()
+                    }
+                    chips.dp + gaps <= maxWidth
+                } ?: ChipTier.all.last()
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(tier.gap, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+                specs.forEach { sp -> FlagChip(sp.icon, sp.label, sp.on, sp.color, labels && !(tier.iconOnlySecondary && sp.secondary), tier, sp.onClick) }
+            }
+        }
+    }
     if (confirmTrash && trash != null && itemId != null) ConfirmTrashDialog(onConfirm = { confirmTrash = false; trash.trash(itemId); onDeleted() }, onDismiss = { confirmTrash = false })
     if (peekOpen && flag.note != null) {
         NotePeekSheet(
@@ -177,17 +207,29 @@ fun FlagBar(flag: Flag, uid: String, progress: ProgressRepository, modifier: Mod
     }
 }
 
+/** Chip sizes, largest first; [FlagBar] picks the first one whose row fits the width. */
+private class ChipTier(val padH: Dp, val padV: Dp, val icon: Dp, val iconGap: Dp, val gap: Dp, val font: TextUnit, val iconOnlySecondary: Boolean) {
+    companion object {
+        val all = listOf(
+            ChipTier(10.dp, 8.dp, 18.dp, 5.dp, 6.dp, 12.sp, false),
+            ChipTier(8.dp, 7.dp, 16.dp, 4.dp, 5.dp, 11.5.sp, false),
+            ChipTier(6.dp, 7.dp, 15.dp, 3.dp, 4.dp, 11.sp, false),
+            ChipTier(6.dp, 7.dp, 15.dp, 3.dp, 4.dp, 11.sp, true),
+        )
+    }
+}
+
 @Composable
-private fun FlagChip(icon: ImageVector, label: String, on: Boolean, color: Color, showLabel: Boolean, onClick: () -> Unit) {
+private fun FlagChip(icon: ImageVector, label: String, on: Boolean, color: Color, showLabel: Boolean, tier: ChipTier, onClick: () -> Unit) {
     val p = LocalPalette.current
     Row(
         Modifier.clip(MaterialTheme.shapes.small).background(if (on) color.copy(alpha = .16f) else Color.Transparent)
             .border(BorderStroke(1.dp, if (on) color else p.outline), MaterialTheme.shapes.small)
-            .clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
+            .clickable(onClick = onClick).padding(horizontal = tier.padH, vertical = tier.padV),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(tier.iconGap),
     ) {
-        Icon(icon, label, Modifier.size(18.dp), tint = if (on) color else p.text3)
-        if (showLabel) Text(label, style = MaterialTheme.typography.labelMedium, color = if (on) color else p.text2)
+        Icon(icon, label, Modifier.size(tier.icon), tint = if (on) color else p.text3)
+        if (showLabel) Text(label, style = MaterialTheme.typography.labelMedium.copy(fontSize = tier.font), color = if (on) color else p.text2, maxLines = 1, softWrap = false)
     }
 }
 
