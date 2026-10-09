@@ -89,13 +89,20 @@ internal fun codeAnnotated(code: String, lang: String?, colors: CodeColors): and
     }
 }
 
+/**
+ * A syntax-coloured code listing. With a [uid] and [block] it is highlightable like the web's (`code`, `points.N.code`,
+ * `headerCode`): the token colours are the `base` of an [HText], so saved offsets count the code text exactly.
+ */
 @Composable
-fun CodeBlock(code: String, lang: String?, modifier: Modifier = Modifier) {
+fun CodeBlock(code: String, lang: String?, modifier: Modifier = Modifier, uid: String? = null, block: String? = null) {
     val dark = LocalPalette.current.bg.luminance() < .5f
     val colors = if (dark) darkCode else lightCode
-    val text = remember(code, lang, dark) { codeAnnotated(code.trimEnd(), lang, colors) }
+    val shown = code.trimEnd()
+    val text = remember(code, lang, dark) { codeAnnotated(shown, lang ?: "c", colors) }
+    val style = MaterialTheme.typography.bodyMedium.copy(fontFamily = Mono, fontSize = 12.5.sp, lineHeight = 18.sp)
     Box(modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(colors.bg).horizontalScroll(rememberScrollState()).padding(12.dp)) {
-        Text(text, color = colors.text, style = MaterialTheme.typography.bodyMedium.copy(fontFamily = Mono, fontSize = 12.5.sp, lineHeight = 18.sp), softWrap = false)
+        if (uid != null && block != null) HText(uid, block, shown, base = text, color = colors.text, style = style, softWrap = false, raw = code)
+        else Text(text, color = colors.text, style = style, softWrap = false)
     }
 }
 
@@ -205,7 +212,7 @@ fun WrittenBody(a: JSONObject, modifier: Modifier = Modifier, uid: String? = nul
     val p = LocalPalette.current
     val primary = MaterialTheme.colorScheme.primary
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        a.str("code")?.let { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { BlockLabel(a.str("codeLang") ?: "Code"); CodeBlock(it, a.str("codeLang")) } }
+        a.str("code")?.let { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { BlockLabel(a.str("codeLang") ?: "Code"); CodeBlock(it, a.str("codeLang"), uid = uid, block = "code") } }
         a.str("image")?.let { AnswerImage(it) }
 
         // সংক্ষেপ — the summary, a string or a list of lines. Web `.written-summary`:
@@ -278,7 +285,7 @@ private fun Points(points: JSONArray, uid: String?) {
             val pt = points.get(i)
             when {
                 pt is JSONObject && pt.str("code") != null -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    BlockLabel(pt.str("label") ?: pt.str("codeLang") ?: "Code"); CodeBlock(pt.getString("code"), pt.str("codeLang"))
+                    BlockLabel(pt.str("label") ?: pt.str("codeLang") ?: "Code"); CodeBlock(pt.getString("code"), pt.str("codeLang"), uid = uid, block = "points.$i.code")
                 }
                 pt is JSONObject && pt.str("diagram") != null -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     BlockLabel(pt.str("label") ?: "Diagram"); DiagramBlock(pt.getString("diagram"), uid = uid, block = "points.$i.diagram")

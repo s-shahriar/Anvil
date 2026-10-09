@@ -221,3 +221,6 @@ the partial file.
   connection returns; `pull()` re-applies batches that landed during its fetch. Content delta is keyed by row `id` (uids are not unique in General).
 - **FlagBar** (quiz, labels on) is a full-width action bar: one equal slot per action, icon over label, aligned with the answer cards;
   it keeps its shape when Weak appears; only the label size steps down (12→11→10sp) if a label would not fit its slot. Study/Written cards keep icon-only chips.
+- **Code is highlightable** (2026-10-09): `CodeBlock(code, lang, uid, block)` renders an `HText` whose `base` is the token colouring;
+  block keys match the web — `code`, `points.N.code`, `headerCode` (and MCQ `q.code`). ict-quiz's `prune-highlights.mjs` models them.
+- **Pinned question bar carries the flag bar** (`QuestionPeekBar(actions = …)` from `ReaderScreen`), like the web's `.wpeek-actions`.

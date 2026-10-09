@@ -71,7 +71,7 @@ fun LongCard(
             Icon(if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, if (open) "Collapse" else "Expand", tint = p.text3)
         }
         // The listing the card is about, visible while collapsed.
-        item.headerCode?.let { CodeBlock(it, item.headerCodeLang) }
+        item.headerCode?.let { CodeBlock(it, item.headerCodeLang, uid = item.uid, block = "headerCode") }
         if (open) item.answer?.let { WrittenBody(it, uid = item.uid) }
         item.uid?.let { FlagBar(flag, it, progress, itemId = item.id) }
     }

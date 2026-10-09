@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import com.syed.slate.ui.component.BarTitle
 import com.syed.slate.ui.component.SlateTopBar
 import com.syed.slate.ui.reader.QuestionPeekBar
+import com.syed.slate.ui.quiz.FlagBar
 import kotlinx.coroutines.launch
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -215,6 +216,8 @@ fun ReaderScreen(
                 question = peekState?.first?.item?.question, number = peekState?.first?.number,
                 onJump = { peekState?.second?.let { i -> scope.launch { list.animateScrollToItem(i) } } },
                 modifier = Modifier.align(Alignment.TopCenter),
+                // The open card's own flag bar, so it is reachable mid-answer (it also sits at the card's end).
+                actions = peekState?.first?.item?.let { item -> item.uid?.let { uid -> { FlagBar(flags[uid] ?: Flag(), uid, m.progress, itemId = item.id) } } },
             )
         }
     }

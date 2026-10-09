@@ -55,9 +55,11 @@ import com.syed.slate.ui.theme.LocalPalette
  *    place (collapsed: two lines with a fade; expanded: up to 45% of the screen, scrollable).
  *  - Up-arrow button scrolls back to the card's real header.
  *  - Topic-coloured left rule, tinted border, shadow; fades in only while the card's body is on screen.
+ *  - [actions]: the card's flag bar (Nail / Important / Weak / Note / Delete) on a row under the question, so it can be
+ *    used from anywhere in a long answer, not only from the card's end.
  */
 @Composable
-fun QuestionPeekBar(question: String?, number: Int?, onJump: () -> Unit, modifier: Modifier = Modifier) {
+fun QuestionPeekBar(question: String?, number: Int?, onJump: () -> Unit, modifier: Modifier = Modifier, actions: (@Composable () -> Unit)? = null) {
     val color = MaterialTheme.colorScheme.primary
     val p = LocalPalette.current
     // Keep the last question while fading out, so the bar doesn't blank mid-animation.
@@ -79,7 +81,8 @@ fun QuestionPeekBar(question: String?, number: Int?, onJump: () -> Unit, modifie
         ) {
             Row(Modifier.height(IntrinsicSize.Min)) {
                 Box(Modifier.width(3.dp).fillMaxHeight().background(color))
-                Row(Modifier.padding(start = 10.dp, end = 8.dp, top = 8.dp, bottom = 9.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.padding(start = 10.dp, end = 8.dp, top = 8.dp, bottom = 9.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Column(
                         Modifier.weight(1f).clip(RoundedCornerShape(6.dp)).clickable(enabled = clamped || expanded) { expanded = !expanded },
                         verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -114,6 +117,11 @@ fun QuestionPeekBar(question: String?, number: Int?, onJump: () -> Unit, modifie
                     ) {
                         Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.ArrowUpward, "প্রশ্নে ফিরে যাও", Modifier.size(16.dp), tint = p.text2) }
                     }
+                }
+                if (actions != null) {
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(p.outline))
+                    actions()
+                }
                 }
             }
         }
