@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.LocalFireDepartment
@@ -65,6 +66,9 @@ import com.syed.slate.practice.SampleTables
 import com.syed.slate.progress.Flag
 import com.syed.slate.progress.FlagRules
 import com.syed.slate.progress.ProgressRepository
+import com.syed.slate.ui.highlight.HText
+import com.syed.slate.ui.quiz.NoteEditorSheet
+import com.syed.slate.ui.quiz.NotePeekSheet
 import com.syed.slate.ui.reader.DataTable
 import com.syed.slate.ui.theme.LocalPalette
 import com.syed.slate.ui.theme.Mono
@@ -108,12 +112,30 @@ private fun FlagChip(icon: ImageVector, label: String, on: Boolean, color: Color
 @Composable
 fun ImpWeakButtons(flag: Flag, uid: String, progress: ProgressRepository, modifier: Modifier = Modifier) {
     val p = LocalPalette.current
+    // A drill takes a note like any other question — its `practice__…` id is already the uid the flags hang off.
+    var peekOpen by remember { mutableStateOf(false) }
+    var editorOpen by remember { mutableStateOf(false) }
     HandMirror {
         Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
             FlagChip(Icons.Filled.Bookmark, "Important", flag.important, p.imp) { progress.update(uid, FlagRules::toggleImportant) }
             if (flag.important) FlagChip(Icons.Filled.LocalFireDepartment, "Weak", flag.weak, p.warn) { progress.update(uid, FlagRules::toggleWeak) }
+            FlagChip(Icons.Filled.EditNote, "Note", flag.note != null, MaterialTheme.colorScheme.primary) {
+                if (flag.note != null) peekOpen = true else editorOpen = true
+            }
         }
     }
+    if (peekOpen && flag.note != null) NotePeekSheet(
+        note = flag.note,
+        onEdit = { peekOpen = false; editorOpen = true },
+        onRemove = { peekOpen = false; progress.update(uid) { f -> FlagRules.setNote(f, null) } },
+        onDismiss = { peekOpen = false },
+    )
+    if (editorOpen) NoteEditorSheet(
+        initial = flag.note.orEmpty(),
+        onSave = { progress.update(uid) { f -> FlagRules.setNote(f, it) }; editorOpen = false },
+        onRemove = { progress.update(uid) { f -> FlagRules.setNote(f, null) }; editorOpen = false },
+        onDismiss = { editorOpen = false },
+    )
 }
 
 /** The 3dp accent rule down the left of a prompt (the web's `.practice-cmd-q`). */
@@ -245,8 +267,9 @@ fun CommandPractice(drills: List<Drill>, flags: Map<String, Flag>, progress: Pro
                     style = MaterialTheme.typography.labelMedium, color = p.onPrimaryContainer)
             }
             SchemaBar(drill.sample)
-            Text(
-                drill.problem.prompt, Modifier.fillMaxWidth().accentBar(MaterialTheme.colorScheme.primary).padding(start = 10.dp),
+            HText(
+                drill.id, "prompt", drill.problem.prompt,
+                Modifier.fillMaxWidth().accentBar(MaterialTheme.colorScheme.primary).padding(start = 10.dp),
                 style = MaterialTheme.typography.titleMedium,
             )
 
@@ -263,7 +286,7 @@ fun CommandPractice(drills: List<Drill>, flags: Map<String, Flag>, progress: Pro
 
             if (status == "correct") Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(p.ok.copy(alpha = .12f)).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Filled.CheckCircle, null, tint = p.ok)
-                Column { Text("সঠিক!", color = p.ok, style = MaterialTheme.typography.labelLarge); drill.problem.explain?.let { Text(it, style = noteStyle, color = p.text3) } }
+                Column { Text("সঠিক!", color = p.ok, style = MaterialTheme.typography.labelLarge); drill.problem.explain?.let { HText(drill.id, "explain", it, style = noteStyle, color = p.text3) } }
             }
             if (status == "wrong") Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(p.bad.copy(alpha = .12f)).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Filled.Error, null, tint = p.bad)
@@ -277,10 +300,10 @@ fun CommandPractice(drills: List<Drill>, flags: Map<String, Flag>, progress: Pro
                     Icon(Icons.Filled.Lightbulb, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                     Text("উত্তর:", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 }
-                drill.problem.answers.ifEmpty { listOf(drill.problem.accept.first()) }.forEach {
-                    Text(it, style = monoStyle)
+                drill.problem.answers.ifEmpty { listOf(drill.problem.accept.first()) }.forEachIndexed { i, a ->
+                    HText(drill.id, "answer.$i", a, style = monoStyle)
                 }
-                drill.problem.explain?.let { Text(it, style = noteStyle, color = p.text3) }
+                drill.problem.explain?.let { HText(drill.id, "explain", it, style = noteStyle, color = p.text3) }
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

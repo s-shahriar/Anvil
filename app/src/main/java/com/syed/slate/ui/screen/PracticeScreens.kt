@@ -226,7 +226,7 @@ fun PracticeImportantScreen(vm: SlateViewModel, onBack: () -> Unit) {
     val m = vm.module(ModuleId.ICT)
     val flags by m.progress.flags.collectAsState()
     val blobVer by app.module(ModuleId.ICT).blobs.version.collectAsState()
-    val all = remember(blobVer) { app.practice.flatMap { c -> c.topics.flatMap { t -> Practice.drillsFor(c, t, tag = true) } } }
+    val all = remember(blobVer) { app.practice.flatMap { c -> c.topics.flatMap { t -> Practice.drillableFor(c, t, tag = true) } } }
     // Items un-marked mid-drill drop out of the list, as on the web.
     val drills = all.filter { QuizPool.matches(PoolSet.IMPORTANT, flags[it.id]) }
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {

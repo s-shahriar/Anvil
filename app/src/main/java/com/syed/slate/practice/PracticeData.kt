@@ -117,4 +117,26 @@ object Practice {
     fun drillsFor(c: Category, t: Topic, tag: Boolean = false): List<Drill> = t.practice.map {
         Drill(it, cmdId(c.id, t.id, it.accept.firstOrNull().orEmpty()), c.caseInsensitive, if (tag) "${c.name} · ${t.name}" else null, c.sampleFor(t))
     }
+
+    /**
+     * Everything in a topic that CAN be drilled: the real drills, then every reference command with no drill behind it,
+     * turned into one (prompt = its description, answer = the command). Web parity with PracticeImportantRun.jsx.
+     *
+     * The Important list has to use this, not [drillsFor]: a bookmarked Commands card was dropped on the floor, so the
+     * Practice card counted 2 Important while the drill itself opened as "প্রশ্ন 1 / 1".
+     */
+    fun drillableFor(c: Category, t: Topic, tag: Boolean = false): List<Drill> {
+        val out = ArrayList(drillsFor(c, t, tag))
+        val seen = out.mapTo(HashSet()) { it.id }
+        for (cmd in buildCommandList(t.commands, t.practice)) {
+            val id = cmdId(c.id, t.id, cmd.key)
+            if (!seen.add(id)) continue
+            val prompt = cmd.prompt.ifEmpty { cmd.desc }.ifEmpty { "এই command টি লেখো" }
+            out.add(Drill(
+                Problem(prompt, listOf(cmd.key), cmd.cmds, null),
+                id, c.caseInsensitive, if (tag) "${c.name} · ${t.name}" else null, c.sampleFor(t),
+            ))
+        }
+        return out
+    }
 }
