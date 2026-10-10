@@ -20,14 +20,22 @@ object LongForm {
      */
     fun layout(items: List<Item>): Layout {
         val regular = items.filter { it.segment == null }
-        val names = items.mapNotNull { it.segment }.distinct()
+        val names = items.mapNotNull { it.segment }.distinct().notesFirst { it }
         val segments = names.map { n ->
             val inSeg = items.filter { it.segment == n }
-            val subs = inSeg.map { it.subsegment }.distinct().map { sn -> SubGroup(sn, inSeg.filter { it.subsegment == sn }) }
+            val subs = inSeg.map { it.subsegment }.distinct().notesFirst { it }
+                .map { sn -> SubGroup(sn, inSeg.filter { it.subsegment == sn }) }
             Segment(n, subs)
         }
         return Layout(regular, segments)
     }
+
+    /**
+     * A "Notes" group is the cheat sheet for everything under it, so it is read first and stays on top however many
+     * questions land above it later. Everything else keeps the order it appears in (sortedBy is stable).
+     */
+    private const val NOTES_GROUP = "Notes"
+    private fun <T> List<T>.notesFirst(name: (T) -> String?) = sortedBy { if (name(it) == NOTES_GROUP) 0 else 1 }
 
     /** Every piece of text in the answer, flattened, so search finds what is written inside a card. */
     fun answerText(item: Item): String {

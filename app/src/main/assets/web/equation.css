@@ -221,9 +221,17 @@
 }
 
 /* ── Highlights ───────────────────────────────────── */
+/* Ported from the web (ict-quiz equation.css). A mark is a translucent wash, so
+   it only reads when the text on it is full-contrast; the note is var(--text-3)
+   at 0.78rem and a wash under that grey came out muddy in both themes. */
+.eq-card .hl-mark { color: var(--text); }
+[data-theme='dark'] .eq-card .hl-mark { font-weight: 450; }
+
 /* A highlighted formula is marked as a whole; inline-block so the band covers a
-   fraction's full height instead of only the text line. */
+   fraction's full height instead of only the text line. The formula is drawn in
+   --accent, which disappears into a rose or violet wash. */
 .hl-mark.eq-hl-formula {
+  color: var(--text);
   display: inline-block;
   max-width: 100%;
   padding: 3px 8px;
