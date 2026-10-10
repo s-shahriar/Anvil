@@ -84,6 +84,7 @@ object TopicCatalog {
         "information_security" to "Information Security", "linux" to "Linux",
         "microprocessor" to "Microprocessor", "software_engineering" to "Software Engineering",
         "machine_learning" to "Machine Learning", "theory_of_computation" to "Theory of Computation",
+        "telecommunication" to "Telecommunication",
         "server" to "Server", "banking" to "Banking", "datacenter" to "Data Center",
         "general_knowledge" to "General Knowledge",
     )
