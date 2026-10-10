@@ -50,7 +50,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.syed.slate.content.PoolSet
@@ -65,7 +69,18 @@ import com.syed.slate.ui.reader.DataTable
 import com.syed.slate.ui.theme.LocalPalette
 import com.syed.slate.ui.theme.Mono
 
-private val monoStyle @Composable get() = MaterialTheme.typography.bodyMedium.copy(fontFamily = Mono, fontSize = 13.sp, lineHeight = 19.sp)
+/**
+ * Code inside a practice card. It WRAPS — never a sideways scroll: the web made that call deliberately
+ * (index.css `.practice-cmd` / `.practice-answer code`: "wrap rather than hide columns behind a scroll"),
+ * and on a phone a column scrolled off the right edge is simply invisible.
+ */
+internal val monoStyle @Composable get() = MaterialTheme.typography.bodyMedium.copy(fontFamily = Mono, fontSize = 13.sp, lineHeight = 19.sp)
+
+/**
+ * The note under a command or an answer. bodyMedium (15.7sp) towered over the 13sp code right above it;
+ * the web keeps the two a hair apart (0.84rem note vs 0.8rem code) so they read as one block.
+ */
+internal val noteStyle @Composable get() = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp, lineHeight = 20.sp)
 
 /** White card on the tinted page, hairline border: the surface every practice block sits on (the web's `.practice-cmd-row`). */
 @Composable
@@ -150,7 +165,13 @@ fun SchemaBar(data: SampleTables?) {
         if (!expanded) {
             Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 data.forEach { (name, t) ->
-                    Text("$name (${t.columns.joinToString(", ")})", Modifier.horizontalScroll(rememberScrollState()), style = monoStyle.copy(fontSize = 12.sp), softWrap = false)
+                    Text(
+                        buildAnnotatedString {
+                            withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)) { append(name) }
+                            withStyle(SpanStyle(color = p.text2)) { append(" (" + t.columns.joinToString(", ") + ")") }
+                        },
+                        style = monoStyle.copy(fontSize = 12.sp),
+                    )
                 }
             }
         } else SampleTableBlocks(data, Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp))
@@ -234,7 +255,7 @@ fun CommandPractice(drills: List<Drill>, flags: Map<String, Flag>, progress: Pro
                 input, { input = it; if (status == "wrong") status = "idle" }, Modifier.fillMaxWidth(),
                 readOnly = status == "correct", textStyle = monoStyle,
                 prefix = { Text("$ ", style = monoStyle, color = MaterialTheme.colorScheme.primary) },
-                placeholder = { Text("command লিখে Check চাপো…", style = MaterialTheme.typography.bodyMedium) },
+                placeholder = { Text("command লিখে Check চাপো…", style = monoStyle) },
                 keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, capitalization = KeyboardCapitalization.None),
                 minLines = 1, maxLines = 8, isError = status == "wrong",
                 colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(focusedBorderColor = border, unfocusedBorderColor = border),
@@ -242,7 +263,7 @@ fun CommandPractice(drills: List<Drill>, flags: Map<String, Flag>, progress: Pro
 
             if (status == "correct") Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(p.ok.copy(alpha = .12f)).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Filled.CheckCircle, null, tint = p.ok)
-                Column { Text("সঠিক!", color = p.ok, style = MaterialTheme.typography.labelLarge); drill.problem.explain?.let { Text(it, style = MaterialTheme.typography.bodyMedium) } }
+                Column { Text("সঠিক!", color = p.ok, style = MaterialTheme.typography.labelLarge); drill.problem.explain?.let { Text(it, style = noteStyle, color = p.text3) } }
             }
             if (status == "wrong") Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(p.bad.copy(alpha = .12f)).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Filled.Error, null, tint = p.bad)
@@ -257,9 +278,9 @@ fun CommandPractice(drills: List<Drill>, flags: Map<String, Flag>, progress: Pro
                     Text("উত্তর:", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 }
                 drill.problem.answers.ifEmpty { listOf(drill.problem.accept.first()) }.forEach {
-                    Text(it, Modifier.horizontalScroll(rememberScrollState()), style = monoStyle, softWrap = false)
+                    Text(it, style = monoStyle)
                 }
-                drill.problem.explain?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                drill.problem.explain?.let { Text(it, style = noteStyle, color = p.text3) }
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

@@ -22,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -64,6 +65,8 @@ import com.syed.slate.ui.practice.DrillFilter
 import com.syed.slate.ui.practice.FilterBar
 import com.syed.slate.ui.practice.ImpWeakButtons
 import com.syed.slate.ui.practice.SampleTableBlocks
+import com.syed.slate.ui.practice.monoStyle
+import com.syed.slate.ui.practice.noteStyle
 import com.syed.slate.ui.reader.DataTable
 import com.syed.slate.ui.theme.LocalPalette
 import com.syed.slate.ui.theme.Mono
@@ -144,7 +147,16 @@ private fun TopicDropdown(cat: Category, current: Topic, modifier: Modifier, onS
         ExposedDropdownMenu(open, { open = false }) {
             groups.forEach { (set, topics) ->
                 if (set.isNotEmpty()) Text("SET $set", Modifier.padding(horizontal = 16.dp, vertical = 6.dp), style = MaterialTheme.typography.labelMedium, color = LocalPalette.current.text3)
-                topics.forEach { t -> DropdownMenuItem({ Text(t.name) }, { onSelect(t.id); open = false }) }
+                topics.forEach { t ->
+                    // Mark where you are: web parity with `.practice-dd-item.active` — accent, bold, a tick.
+                    val on = t.id == current.id
+                    DropdownMenuItem(
+                        { Text(t.name, color = if (on) MaterialTheme.colorScheme.primary else LocalPalette.current.text2, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium) },
+                        { onSelect(t.id); open = false },
+                        trailingIcon = { if (on) Icon(Icons.Filled.Check, "নির্বাচিত", tint = MaterialTheme.colorScheme.primary) },
+                        modifier = if (on) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = .10f)) else Modifier,
+                    )
+                }
             }
         }
     }
@@ -197,11 +209,11 @@ private fun CommandsPanel(cat: Category, topic: Topic, flags: Map<String, Flag>,
             c.cmds.forEach {
                 Text(
                     it, Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = .08f))
-                        .border(BorderStroke(1.dp, p.outline.copy(alpha = .6f)), RoundedCornerShape(8.dp)).horizontalScroll(rememberScrollState()).padding(10.dp),
-                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = Mono, fontSize = 13.sp, lineHeight = 19.sp), color = MaterialTheme.colorScheme.primary, softWrap = false,
+                        .border(BorderStroke(1.dp, p.outline.copy(alpha = .6f)), RoundedCornerShape(8.dp)).padding(10.dp),
+                    style = monoStyle, color = MaterialTheme.colorScheme.primary,
                 )
             }
-            if (c.desc.isNotEmpty()) Text(c.desc, style = MaterialTheme.typography.bodyMedium, color = p.text2)
+            if (c.desc.isNotEmpty()) Text(c.desc, style = noteStyle, color = p.text2)
             ImpWeakButtons(flags[id(c.key)] ?: Flag(), id(c.key), progress)
         }
     }
